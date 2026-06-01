@@ -857,7 +857,7 @@
    "property": "options",
    "property_type": "Text",
    "row_name": null,
-   "value": "\nPO-FABRIC-.###.-.YY.\nPO-GENERAL ITEM-.###.-.YY.\nPO-LOCAL MATERIAL-.###.-.YY.\nPO-IMP MATERIAL-.###.-.YY.\nPO-SERVICES-.###.-.YY.\nPO-STOCK LOT-.###.-.YY.\nPO-TOWEL-.###.-.YY.\nPO-TOWEL-.###.-.YY."
+   "value": "\nLOC.#####.\nIMP.#####"
   },
   {
    "_assign": null,

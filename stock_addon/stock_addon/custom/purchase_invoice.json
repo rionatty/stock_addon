@@ -545,7 +545,7 @@
    "property": "options",
    "property_type": "Text",
    "row_name": null,
-   "value": "\nACC-PINV-RETURN-.YYYY.-\nPINV-FABRIC-.###.-.YY.\nPINV-GENERAL ITEM-.###.-.YY.\nPINV-MATERIAL-.###.-.YY.\nPINV-SERVICES-.###.-.YY.\nPINV-STOCK LOT-.###.-.YY.\nPINV-TOWEL-.###.-.YY.\nPINV-IMP MATERIAL-.###.-.YY."
+   "value": "\nLOC.#####.\nIMP.#####."
   },
   {
    "_assign": null,

@@ -1,0 +1,201 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-06-01 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "count_date",
+  "count_time",
+  "column_break_head",
+  "status",
+  "ref_2",
+  "end_of_fiscal_year",
+  "referenced_document",
+  "amended_from",
+  "counter_section",
+  "counting_type",
+  "counter_party_type",
+  "inventory_counter",
+  "items_section",
+  "items",
+  "posting_section",
+  "stock_reconciliation",
+  "remarks_section",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "default": "INV-CNT-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "INV-CNT-.YYYY.-",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "count_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Count Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "count_time",
+   "fieldtype": "Time",
+   "label": "Time"
+  },
+  {
+   "fieldname": "column_break_head",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Open",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Open\nClosed\nPosted\nCancelled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ref_2",
+   "fieldtype": "Data",
+   "label": "Ref. 2"
+  },
+  {
+   "fieldname": "end_of_fiscal_year",
+   "fieldtype": "Date",
+   "label": "End of Fiscal Year"
+  },
+  {
+   "fieldname": "referenced_document",
+   "fieldtype": "Data",
+   "label": "Referenced Document"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Inventory Counting",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "counter_section",
+   "fieldtype": "Section Break",
+   "label": "Counting"
+  },
+  {
+   "default": "Single Counter",
+   "fieldname": "counting_type",
+   "fieldtype": "Select",
+   "label": "Counting Type",
+   "options": "Single Counter\nMultiple Counters"
+  },
+  {
+   "default": "User",
+   "fieldname": "counter_party_type",
+   "fieldtype": "Select",
+   "label": "Inventory Counter Type",
+   "options": "User\nEmployee"
+  },
+  {
+   "fieldname": "inventory_counter",
+   "fieldtype": "Dynamic Link",
+   "label": "Inventory Counter",
+   "options": "counter_party_type"
+  },
+  {
+   "fieldname": "items_section",
+   "fieldtype": "Section Break",
+   "label": "Contents"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Inventory Counting Item"
+  },
+  {
+   "fieldname": "posting_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "stock_reconciliation",
+   "fieldtype": "Link",
+   "label": "Inventory Posting (Stock Reconciliation)",
+   "no_copy": 1,
+   "options": "Stock Reconciliation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-06-01 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Stock Addon",
+ "name": "Inventory Counting",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Stock User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "naming_series"
+}
