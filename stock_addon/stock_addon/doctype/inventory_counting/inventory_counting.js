@@ -2,7 +2,17 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("Inventory Counting", {
+	onload(frm) {
+		// only show batches that belong to the row's item
+		frm.set_query("batch_no", "items", (doc, cdt, cdn) => {
+			const row = locals[cdt][cdn];
+			return { filters: { item: row.item_code || "" } };
+		});
+	},
+
 	refresh(frm) {
+		setup_variance_highlight(frm);
+
 		// Copy to Inventory Posting -> Stock Reconciliation (after submit, not yet posted)
 		if (frm.doc.docstatus === 1 && !frm.doc.stock_reconciliation) {
 			frm.add_custom_button(__("Copy to Inventory Posting"), () => {
@@ -56,6 +66,9 @@ frappe.ui.form.on("Inventory Counting Item", {
 	warehouse(frm, cdt, cdn) {
 		fetch_in_warehouse_qty(frm, locals[cdt][cdn]);
 	},
+	batch_no(frm, cdt, cdn) {
+		fetch_in_warehouse_qty(frm, locals[cdt][cdn]);
+	},
 	counted_qty(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
 		if (flt(row.counted_qty) && !row.counted) {
@@ -76,6 +89,7 @@ function fetch_in_warehouse_qty(frm, row) {
 			item_code: row.item_code,
 			warehouse: row.warehouse,
 			count_date: frm.doc.count_date,
+			batch_no: row.batch_no,
 		},
 		callback(r) {
 			if (r.message) {
@@ -90,7 +104,39 @@ function fetch_in_warehouse_qty(frm, row) {
 function compute_variance(cdt, cdn) {
 	const row = locals[cdt][cdn];
 	const variance = row.counted ? flt(row.counted_qty) - flt(row.in_warehouse_qty) : 0;
-	frappe.model.set_value(cdt, cdn, "variance", variance);
+	frappe.model.set_value(cdt, cdn, "variance", variance).then(() => {
+		tint_variance_rows(cur_frm);
+	});
+}
+
+// Render the Variance cell with a red badge whenever a counted row differs
+// from the on-hand qty. Set as a docfield formatter so it survives grid re-renders.
+function setup_variance_highlight(frm) {
+	const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+	if (!grid || !grid.fields_map || !grid.fields_map.variance) return;
+
+	grid.fields_map.variance.formatter = function (value, df, options, doc) {
+		const v = flt(value);
+		const text = format_number(v, null, df.precision || 6);
+		if (doc && doc.counted && v !== 0) {
+			return `<span style="color:#fff;background-color:#e24c4c;padding:1px 6px;border-radius:3px;font-weight:600;">${text}</span>`;
+		}
+		return text;
+	};
+	grid.refresh();
+	tint_variance_rows(frm);
+}
+
+// Light red background on the whole row for any counted item with a variance.
+function tint_variance_rows(frm) {
+	const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+	if (!grid || !grid.grid_rows) return;
+	grid.grid_rows.forEach((gr) => {
+		if (!gr.row) return;
+		const d = gr.doc || {};
+		const has_variance = d.counted && flt(d.variance) !== 0;
+		gr.row.css("background-color", has_variance ? "#fdecea" : "");
+	});
 }
 
 function set_as_not_counted(frm) {
@@ -163,6 +209,7 @@ function open_add_items_dialog(frm) {
 						added++;
 					});
 					frm.refresh_field("items");
+					tint_variance_rows(frm);
 					frappe.show_alert(__("Added {0} item(s)", [added]));
 					d.hide();
 				},

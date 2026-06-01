@@ -29,7 +29,7 @@ class InventoryCounting(Document):
 		for row in self.items:
 			if not (row.item_code and row.warehouse):
 				continue
-			snapshot = get_stock_as_on(row.item_code, row.warehouse, count_date)
+			snapshot = get_stock_as_on(row.item_code, row.warehouse, count_date, row.batch_no)
 			row.in_warehouse_qty = snapshot.get("qty")
 			# keep the latest valuation rate so the inventory posting can value the variance
 			row.valuation_rate = snapshot.get("valuation_rate")
@@ -58,15 +58,53 @@ class InventoryCounting(Document):
 # Stock snapshot
 # ---------------------------------------------------------------------- #
 @frappe.whitelist()
-def get_stock_as_on(item_code, warehouse, count_date=None):
+def get_stock_as_on(item_code, warehouse, count_date=None, batch_no=None):
 	"""Return on-hand qty and valuation rate for an item/warehouse as of a date.
 
-	Uses the latest Stock Ledger Entry on or before `count_date`.
+	If a batch is given, the qty is summed for that batch up to the count date.
+	Otherwise the latest Stock Ledger Entry balance on or before the date is used.
 	"""
 	if not (item_code and warehouse):
 		return {"qty": 0.0, "valuation_rate": 0.0}
 
 	count_date = getdate(count_date or nowdate())
+
+	if batch_no:
+		params = {
+			"item_code": item_code,
+			"warehouse": warehouse,
+			"batch_no": batch_no,
+			"count_date": count_date,
+		}
+		qty = frappe.db.sql(
+			"""
+			SELECT COALESCE(SUM(actual_qty), 0)
+			FROM `tabStock Ledger Entry`
+			WHERE item_code = %(item_code)s
+			  AND warehouse = %(warehouse)s
+			  AND batch_no = %(batch_no)s
+			  AND is_cancelled = 0
+			  AND docstatus < 2
+			  AND posting_date <= %(count_date)s
+			""",
+			params,
+		)[0][0]
+		rate = frappe.db.sql(
+			"""
+			SELECT valuation_rate
+			FROM `tabStock Ledger Entry`
+			WHERE item_code = %(item_code)s
+			  AND warehouse = %(warehouse)s
+			  AND batch_no = %(batch_no)s
+			  AND is_cancelled = 0
+			  AND docstatus < 2
+			  AND posting_date <= %(count_date)s
+			ORDER BY posting_datetime DESC, creation DESC
+			LIMIT 1
+			""",
+			params,
+		)
+		return {"qty": flt(qty), "valuation_rate": flt(rate[0][0]) if rate else 0.0}
 
 	row = frappe.db.sql(
 		"""
@@ -131,23 +169,49 @@ def get_items_for_count(warehouse=None, item_group=None, count_date=None, includ
 
 	rows = []
 	for b in bins:
-		snapshot = get_stock_as_on(b.item_code, b.warehouse, count_date)
-		if not include_zero_qty and flt(snapshot["qty"]) == 0:
-			continue
-		item = frappe.db.get_value("Item", b.item_code, ["item_name", "stock_uom"], as_dict=True) or {}
-		rows.append(
-			{
-				"item_code": b.item_code,
-				"item_name": item.get("item_name"),
-				"warehouse": b.warehouse,
-				"uom": item.get("stock_uom"),
-				"in_warehouse_qty": snapshot["qty"],
-				"valuation_rate": snapshot["valuation_rate"],
-				"counted": 0,
-				"counted_qty": 0,
-				"variance": 0,
-			}
-		)
+		item = frappe.db.get_value(
+			"Item", b.item_code, ["item_name", "stock_uom", "has_batch_no"], as_dict=True
+		) or {}
+
+		# Batch-tracked items -> one row per batch that has movement up to the count date
+		batch_nos = []
+		if item.get("has_batch_no"):
+			batch_nos = [
+				r[0]
+				for r in frappe.db.sql(
+					"""
+					SELECT batch_no
+					FROM `tabStock Ledger Entry`
+					WHERE item_code = %(item_code)s
+					  AND warehouse = %(warehouse)s
+					  AND batch_no IS NOT NULL AND batch_no != ''
+					  AND is_cancelled = 0 AND docstatus < 2
+					  AND posting_date <= %(count_date)s
+					GROUP BY batch_no
+					""",
+					{"item_code": b.item_code, "warehouse": b.warehouse, "count_date": count_date},
+				)
+			]
+
+		batch_keys = batch_nos or [None]
+		for batch_no in batch_keys:
+			snapshot = get_stock_as_on(b.item_code, b.warehouse, count_date, batch_no)
+			if not include_zero_qty and flt(snapshot["qty"]) == 0:
+				continue
+			rows.append(
+				{
+					"item_code": b.item_code,
+					"item_name": item.get("item_name"),
+					"warehouse": b.warehouse,
+					"batch_no": batch_no,
+					"uom": item.get("stock_uom"),
+					"in_warehouse_qty": snapshot["qty"],
+					"valuation_rate": snapshot["valuation_rate"],
+					"counted": 0,
+					"counted_qty": 0,
+					"variance": 0,
+				}
+			)
 	return rows
 
 
@@ -190,6 +254,7 @@ def make_inventory_posting(source_name, company=None):
 			{
 				"item_code": r.item_code,
 				"warehouse": r.warehouse,
+				"batch_no": r.batch_no,
 				"qty": flt(r.counted_qty),
 				"valuation_rate": flt(r.valuation_rate),
 			},

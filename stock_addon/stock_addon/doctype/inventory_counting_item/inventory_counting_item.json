@@ -10,6 +10,7 @@
   "item_name",
   "freeze",
   "warehouse",
+  "batch_no",
   "in_warehouse_qty",
   "counted",
   "counted_qty",
@@ -51,6 +52,14 @@
    "label": "Whse",
    "options": "Warehouse",
    "reqd": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "batch_no",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Batch No.",
+   "options": "Batch"
   },
   {
    "columns": 1,
