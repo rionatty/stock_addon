@@ -9,6 +9,15 @@ frappe.ui.form.on("Inventory Counting", {
 			return { filters: { item: row.item_code || "" } };
 		});
 
+		// restrict the Count UoM to the item's own UoMs (stock UoM + conversions)
+		frm.set_query("uom", "items", (doc, cdt, cdn) => {
+			const row = locals[cdt][cdn];
+			return {
+				query: "stock_addon.stock_addon.doctype.inventory_counting.inventory_counting.item_uom_query",
+				filters: { item_code: row.item_code || "" },
+			};
+		});
+
 		// default the variance valuation price list to the selling default
 		if (frm.is_new() && !frm.doc.price_list) {
 			frappe.db.get_single_value("Selling Settings", "selling_price_list").then((pl) => {
@@ -89,8 +98,22 @@ frappe.ui.form.on("Inventory Counting", {
 
 frappe.ui.form.on("Inventory Counting Item", {
 	item_code(frm, cdt, cdn) {
-		fetch_in_warehouse_qty(frm, locals[cdt][cdn]);
-		fetch_selling_rate(frm, locals[cdt][cdn]);
+		const row = locals[cdt][cdn];
+		// reset UoM to the item's stock UoM on item change
+		frappe.model.set_value(cdt, cdn, "uom", "");
+		frappe.model.set_value(cdt, cdn, "conversion_factor", 1);
+		fetch_in_warehouse_qty(frm, row);
+		fetch_selling_rate(frm, row);
+		frappe.db.get_value("Item", row.item_code, "stock_uom").then((r) => {
+			const su = r.message && r.message.stock_uom;
+			if (su) {
+				frappe.model.set_value(cdt, cdn, "stock_uom", su);
+				if (!row.uom) frappe.model.set_value(cdt, cdn, "uom", su);
+			}
+		});
+	},
+	uom(frm, cdt, cdn) {
+		fetch_conversion_factor(frm, locals[cdt][cdn]);
 	},
 	warehouse(frm, cdt, cdn) {
 		fetch_in_warehouse_qty(frm, locals[cdt][cdn]);
@@ -109,6 +132,25 @@ frappe.ui.form.on("Inventory Counting Item", {
 		compute_variance(cdt, cdn);
 	},
 });
+
+// Fetch the stock-UoM-per-1-count-UoM conversion factor for a row
+function fetch_conversion_factor(frm, row) {
+	if (!row.item_code || !row.uom) return;
+	frappe.call({
+		method: "stock_addon.stock_addon.doctype.inventory_counting.inventory_counting.get_uom_conversion_factor",
+		args: { item_code: row.item_code, uom: row.uom },
+		callback(r) {
+			const cf = flt(r.message);
+			if (!cf) {
+				frappe.msgprint(
+					__("No UoM conversion defined from {0} for item {1}.", [row.uom, row.item_code])
+				);
+			}
+			frappe.model.set_value(row.doctype, row.name, "conversion_factor", cf || 1);
+			compute_variance(row.doctype, row.name);
+		},
+	});
+}
 
 function fetch_in_warehouse_qty(frm, row) {
 	if (!row.item_code || !row.warehouse) return;
@@ -132,7 +174,11 @@ function fetch_in_warehouse_qty(frm, row) {
 
 function compute_variance(cdt, cdn) {
 	const row = locals[cdt][cdn];
-	const variance = row.counted ? flt(row.counted_qty) - flt(row.in_warehouse_qty) : 0;
+	const cf = flt(row.conversion_factor) || 1;
+	// counted qty is in the count UoM -> convert to stock UoM for all stock maths
+	const stock_qty = flt(row.counted_qty) * cf;
+	const variance = row.counted ? stock_qty - flt(row.in_warehouse_qty) : 0;
+	frappe.model.set_value(cdt, cdn, "stock_qty", stock_qty);
 	frappe.model.set_value(cdt, cdn, "variance", variance).then(() => {
 		frappe.model.set_value(cdt, cdn, "variance_value", variance * flt(row.selling_rate));
 		tint_variance_rows(cur_frm);

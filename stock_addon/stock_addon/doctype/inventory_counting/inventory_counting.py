@@ -11,9 +11,36 @@ class InventoryCounting(Document):
 	def validate(self):
 		self.set_default_price_list()
 		self.refresh_in_warehouse_qty()
+		self.set_uom_and_conversion()
 		self.calculate_variance()
 		self.validate_batches()
 		self.set_status()
+
+	def set_uom_and_conversion(self):
+		"""Default the count UoM to the stock UoM and resolve the conversion
+		factor (stock-UoM qty per 1 count UoM) for every row."""
+		for row in self.items:
+			if not row.item_code:
+				continue
+			if not row.stock_uom:
+				row.stock_uom = frappe.db.get_value("Item", row.item_code, "stock_uom")
+			if not row.uom:
+				row.uom = row.stock_uom
+
+			if row.uom == row.stock_uom:
+				row.conversion_factor = 1.0
+			else:
+				row.conversion_factor = get_uom_conversion_factor(row.item_code, row.uom)
+
+			if flt(row.conversion_factor) <= 0:
+				frappe.throw(
+					_("Row #{0}: No UoM conversion defined from {1} to {2} for item {3}.").format(
+						row.idx,
+						frappe.bold(row.uom),
+						frappe.bold(row.stock_uom),
+						frappe.bold(row.item_code),
+					)
+				)
 
 	def set_default_price_list(self):
 		if not self.price_list:
@@ -41,16 +68,25 @@ class InventoryCounting(Document):
 			row.valuation_rate = snapshot.get("valuation_rate")
 
 	def calculate_variance(self):
+		"""All stock maths is done in the STOCK UoM.
+
+		counted_qty is entered in the count UoM, so it is first converted to the
+		stock UoM (stock_qty). The on-hand qty and selling rate are already in
+		stock-UoM terms, so the variance and its value are consistent.
+		"""
 		rate_cache = {}
 		for row in self.items:
+			cf = flt(row.conversion_factor) or 1.0
+			# counted qty (count UoM) -> stock UoM
+			row.stock_qty = flt(row.counted_qty) * cf
+
 			if row.counted:
-				row.variance = flt(row.counted_qty) - flt(row.in_warehouse_qty)
+				row.variance = flt(row.stock_qty) - flt(row.in_warehouse_qty)
 			else:
-				# not counted yet -> no meaningful variance
-				row.counted_qty = flt(row.counted_qty)
 				row.variance = 0
 
-			# value the variance at the selling price
+			# selling rate is resolved per STOCK UoM so it lines up with the
+			# stock-UoM variance
 			if row.item_code:
 				if row.item_code not in rate_cache:
 					rate_cache[row.item_code] = get_selling_rate(row.item_code, self.price_list)
@@ -177,12 +213,61 @@ def get_stock_as_on(item_code, warehouse, count_date=None, batch_no=None):
 
 
 # ---------------------------------------------------------------------- #
+# UoM conversion
+# ---------------------------------------------------------------------- #
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def item_uom_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Link-field search returning only the item's own UoMs (stock UoM plus any
+	UOM Conversion Detail rows). Used to constrain the Count UoM field."""
+	item_code = (filters or {}).get("item_code")
+	if not item_code:
+		return []
+
+	stock_uom = frappe.db.get_value("Item", item_code, "stock_uom")
+	uoms = set()
+	if stock_uom:
+		uoms.add(stock_uom)
+	for d in frappe.get_all(
+		"UOM Conversion Detail", filters={"parent": item_code}, fields=["uom"]
+	):
+		uoms.add(d.uom)
+
+	txt = (txt or "").lower()
+	return [[u] for u in sorted(uoms) if txt in (u or "").lower()]
+
+
+@frappe.whitelist()
+def get_uom_conversion_factor(item_code, uom):
+	"""Return how many STOCK-UoM units make up 1 `uom` for the item.
+
+	Looks up the item's UOM Conversion Detail. Returns 1 when uom is the stock
+	UoM, or 0 when no conversion is defined (caller treats 0 as an error)."""
+	if not (item_code and uom):
+		return 1.0
+
+	stock_uom = frappe.db.get_value("Item", item_code, "stock_uom")
+	if uom == stock_uom:
+		return 1.0
+
+	cf = frappe.db.get_value(
+		"UOM Conversion Detail", {"parent": item_code, "uom": uom}, "conversion_factor"
+	)
+	return flt(cf)
+
+
+# ---------------------------------------------------------------------- #
 # Selling price (for variance valuation on the printout)
 # ---------------------------------------------------------------------- #
 @frappe.whitelist()
 def get_selling_rate(item_code, price_list=None):
-	"""Selling price of an item. Prefers the given (or default selling) price list,
-	then any selling Item Price, then the item's standard rate."""
+	"""Selling price of an item, normalised PER STOCK UoM.
+
+	Prefers the given (or default selling) price list, then any selling Item
+	Price, then the item's standard rate. When the matched Item Price is quoted
+	in a non-stock UoM, the rate is divided by that UoM's conversion factor so
+	the result is always per stock UoM (consistent with the stock-UoM variance).
+	"""
 	if not item_code:
 		return 0.0
 
@@ -194,22 +279,29 @@ def get_selling_rate(item_code, price_list=None):
 		rows = frappe.get_all(
 			"Item Price",
 			filters=filters,
-			fields=["price_list_rate"],
+			fields=["price_list_rate", "uom"],
 			order_by="valid_from desc, modified desc",
 			limit=1,
 		)
-		return rows[0].price_list_rate if rows else None
+		return rows[0] if rows else None
 
-	rate = None
+	price = None
 	if price_list:
-		rate = latest_price({"item_code": item_code, "selling": 1, "price_list": price_list})
-	if not rate:
-		rate = latest_price({"item_code": item_code, "selling": 1})
-	if not rate:
-		# last resort: item master selling rate
-		rate = frappe.db.get_value("Item", item_code, "standard_rate")
+		price = latest_price({"item_code": item_code, "selling": 1, "price_list": price_list})
+	if not price:
+		price = latest_price({"item_code": item_code, "selling": 1})
 
-	return flt(rate)
+	if price:
+		rate = flt(price.price_list_rate)
+		# normalise a non-stock-UoM price down to the stock UoM
+		if price.uom:
+			cf = get_uom_conversion_factor(item_code, price.uom)
+			if cf > 0:
+				rate = rate / cf
+		return flt(rate)
+
+	# last resort: item master selling rate (already per stock UoM)
+	return flt(frappe.db.get_value("Item", item_code, "standard_rate"))
 
 
 # ---------------------------------------------------------------------- #
@@ -294,11 +386,14 @@ def get_items_for_count(
 					"warehouse": b.warehouse,
 					"batch_no": batch_no,
 					"uom": item.get("stock_uom"),
+					"stock_uom": item.get("stock_uom"),
+					"conversion_factor": 1.0,
 					"in_warehouse_qty": snapshot["qty"],
 					"valuation_rate": snapshot["valuation_rate"],
 					"selling_rate": selling_rate,
 					"counted": 0,
 					"counted_qty": 0,
+					"stock_qty": 0,
 					"variance": 0,
 					"variance_value": 0,
 				}
@@ -340,10 +435,13 @@ def make_inventory_posting(source_name, company=None):
 	sr.set_posting_time = 1
 
 	for r in counted_rows:
+		# Stock Reconciliation works in the STOCK UoM, so post the converted
+		# stock_qty (fall back to counted_qty * conversion_factor for safety)
+		stock_qty = flt(r.stock_qty) or flt(r.counted_qty) * (flt(r.conversion_factor) or 1.0)
 		item_row = {
 			"item_code": r.item_code,
 			"warehouse": r.warehouse,
-			"qty": flt(r.counted_qty),
+			"qty": stock_qty,
 			"valuation_rate": flt(r.valuation_rate),
 		}
 		if r.batch_no:

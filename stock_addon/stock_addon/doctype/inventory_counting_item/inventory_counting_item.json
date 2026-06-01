@@ -15,6 +15,9 @@
   "counted",
   "counted_qty",
   "uom",
+  "conversion_factor",
+  "stock_uom",
+  "stock_qty",
   "variance",
   "selling_rate",
   "variance_value",
@@ -69,7 +72,7 @@
    "fieldname": "in_warehouse_qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "In-Whse Qty on Count Date",
+   "label": "In-Whse Qty on Count Date (Stock UoM)",
    "read_only": 1
   },
   {
@@ -85,16 +88,38 @@
    "fieldname": "counted_qty",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Counted Qty"
+   "label": "Counted Qty (Count UoM)"
   },
   {
    "columns": 1,
-   "fetch_from": "item_code.stock_uom",
    "fieldname": "uom",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "UoM Code",
+   "label": "Count UoM",
    "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "description": "Stock-UoM qty per 1 Count UoM",
+   "fieldname": "conversion_factor",
+   "fieldtype": "Float",
+   "label": "Conversion Factor",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "item_code.stock_uom",
+   "fieldname": "stock_uom",
+   "fieldtype": "Link",
+   "label": "Stock UoM",
+   "options": "UOM",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "stock_qty",
+   "fieldtype": "Float",
+   "label": "Counted Qty (Stock UoM)",
    "read_only": 1
   },
   {
@@ -103,7 +128,7 @@
    "fieldname": "variance",
    "fieldtype": "Float",
    "in_list_view": 1,
-   "label": "Variance",
+   "label": "Variance (Stock UoM)",
    "read_only": 1
   },
   {
