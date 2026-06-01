@@ -9,10 +9,15 @@ from frappe.utils import flt, getdate, nowdate
 
 class InventoryCounting(Document):
 	def validate(self):
+		self.set_default_price_list()
 		self.refresh_in_warehouse_qty()
 		self.calculate_variance()
 		self.validate_batches()
 		self.set_status()
+
+	def set_default_price_list(self):
+		if not self.price_list:
+			self.price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list")
 
 	def on_submit(self):
 		self.db_set("status", "Closed")
@@ -36,6 +41,7 @@ class InventoryCounting(Document):
 			row.valuation_rate = snapshot.get("valuation_rate")
 
 	def calculate_variance(self):
+		rate_cache = {}
 		for row in self.items:
 			if row.counted:
 				row.variance = flt(row.counted_qty) - flt(row.in_warehouse_qty)
@@ -43,6 +49,15 @@ class InventoryCounting(Document):
 				# not counted yet -> no meaningful variance
 				row.counted_qty = flt(row.counted_qty)
 				row.variance = 0
+
+			# value the variance at the selling price
+			if row.item_code:
+				if row.item_code not in rate_cache:
+					rate_cache[row.item_code] = get_selling_rate(row.item_code, self.price_list)
+				row.selling_rate = rate_cache[row.item_code]
+			else:
+				row.selling_rate = 0
+			row.variance_value = flt(row.variance) * flt(row.selling_rate)
 
 	def validate_batches(self):
 		"""Where the item is batch-tracked a batch must be supplied and must belong
@@ -159,6 +174,35 @@ def get_stock_as_on(item_code, warehouse, count_date=None, batch_no=None):
 	if row:
 		return {"qty": flt(row[0].qty_after_transaction), "valuation_rate": flt(row[0].valuation_rate)}
 	return {"qty": 0.0, "valuation_rate": 0.0}
+
+
+# ---------------------------------------------------------------------- #
+# Selling price (for variance valuation on the printout)
+# ---------------------------------------------------------------------- #
+@frappe.whitelist()
+def get_selling_rate(item_code, price_list=None):
+	"""Selling price of an item. Prefers the given (or default selling) price list,
+	then any selling Item Price, then the item's standard rate."""
+	if not item_code:
+		return 0.0
+
+	price_list = price_list or frappe.db.get_single_value("Selling Settings", "selling_price_list")
+
+	rate = None
+	if price_list:
+		rate = frappe.db.get_value(
+			"Item Price",
+			{"item_code": item_code, "selling": 1, "price_list": price_list},
+			"price_list_rate",
+		)
+	if not rate:
+		rate = frappe.db.get_value(
+			"Item Price", {"item_code": item_code, "selling": 1}, "price_list_rate"
+		)
+	if not rate:
+		rate = frappe.db.get_value("Item", item_code, "standard_rate")
+
+	return flt(rate)
 
 
 # ---------------------------------------------------------------------- #

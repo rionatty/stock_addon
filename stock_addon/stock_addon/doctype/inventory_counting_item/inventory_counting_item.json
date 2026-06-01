@@ -16,6 +16,8 @@
   "counted_qty",
   "uom",
   "variance",
+  "selling_rate",
+  "variance_value",
   "valuation_rate"
  ],
  "fields": [
@@ -102,6 +104,20 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Variance",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "selling_rate",
+   "fieldtype": "Currency",
+   "label": "Selling Rate",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "variance_value",
+   "fieldtype": "Currency",
+   "label": "Variance Value (Selling)",
    "read_only": 1
   },
   {

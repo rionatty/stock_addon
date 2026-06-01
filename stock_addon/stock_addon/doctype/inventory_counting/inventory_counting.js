@@ -13,6 +13,22 @@ frappe.ui.form.on("Inventory Counting", {
 	refresh(frm) {
 		setup_variance_highlight(frm);
 
+		// Print only the variance rows, valued at selling price
+		if (!frm.is_new()) {
+			frm.add_custom_button(__("Print Variance"), () => {
+				const url =
+					"/printview?doctype=" +
+					encodeURIComponent(frm.doc.doctype) +
+					"&name=" +
+					encodeURIComponent(frm.doc.name) +
+					"&format=" +
+					encodeURIComponent("Inventory Counting Variance") +
+					"&trigger_print=1&_lang=" +
+					(frappe.boot.lang || "en");
+				window.open(frappe.urllib.get_full_url(url));
+			}, __("Print"));
+		}
+
 		// Copy to Inventory Posting -> Stock Reconciliation (after submit, not yet posted)
 		if (frm.doc.docstatus === 1 && !frm.doc.stock_reconciliation) {
 			frm.add_custom_button(__("Copy to Inventory Posting"), () => {

@@ -19,6 +19,8 @@
   "counting_type",
   "counter_party_type",
   "inventory_counter",
+  "column_break_counter",
+  "price_list",
   "items_section",
   "items",
   "posting_section",
@@ -110,6 +112,17 @@
    "fieldtype": "Dynamic Link",
    "label": "Inventory Counter",
    "options": "counter_party_type"
+  },
+  {
+   "fieldname": "column_break_counter",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Selling price list used to value the variance on the printout.",
+   "fieldname": "price_list",
+   "fieldtype": "Link",
+   "label": "Variance Valuation Price List",
+   "options": "Price List"
   },
   {
    "fieldname": "items_section",
