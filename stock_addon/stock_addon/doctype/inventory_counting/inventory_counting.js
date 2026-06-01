@@ -112,19 +112,26 @@ function compute_variance(cdt, cdn) {
 // Render the Variance cell with a red badge whenever a counted row differs
 // from the on-hand qty. Set as a docfield formatter so it survives grid re-renders.
 function setup_variance_highlight(frm) {
-	const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
-	if (!grid || !grid.fields_map || !grid.fields_map.variance) return;
+	const apply = () => {
+		const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+		if (!grid || !grid.fields_map || !grid.fields_map.variance) return;
 
-	grid.fields_map.variance.formatter = function (value, df, options, doc) {
-		const v = flt(value);
-		const text = format_number(v, null, df.precision || 6);
-		if (doc && doc.counted && v !== 0) {
-			return `<span style="color:#fff;background-color:#e24c4c;padding:1px 6px;border-radius:3px;font-weight:600;">${text}</span>`;
-		}
-		return text;
+		grid.fields_map.variance.formatter = function (value, df, options, doc) {
+			const v = flt(value);
+			const text = format_number(v, null, df.precision || 6);
+			if (doc && doc.counted && v !== 0) {
+				return `<span style="color:#fff;background-color:#e24c4c;padding:1px 6px;border-radius:3px;font-weight:600;">${text}</span>`;
+			}
+			return text;
+		};
+		grid.refresh();
+		tint_variance_rows(frm);
 	};
-	grid.refresh();
-	tint_variance_rows(frm);
+
+	// Apply now, then again once the (read-only, post-submit) grid finishes
+	// rendering so the colour is not lost after submission.
+	apply();
+	setTimeout(apply, 300);
 }
 
 // Light red background on the whole row for any counted item with a variance.

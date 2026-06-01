@@ -11,6 +11,7 @@ class InventoryCounting(Document):
 	def validate(self):
 		self.refresh_in_warehouse_qty()
 		self.calculate_variance()
+		self.validate_batches()
 		self.set_status()
 
 	def on_submit(self):
@@ -42,6 +43,39 @@ class InventoryCounting(Document):
 				# not counted yet -> no meaningful variance
 				row.counted_qty = flt(row.counted_qty)
 				row.variance = 0
+
+	def validate_batches(self):
+		"""Where the item is batch-tracked a batch must be supplied and must belong
+		to the item; counted quantities may not be negative."""
+		batch_cache = {}
+		for row in self.items:
+			if not row.item_code:
+				continue
+
+			if row.item_code not in batch_cache:
+				batch_cache[row.item_code] = frappe.db.get_value(
+					"Item", row.item_code, "has_batch_no"
+				)
+			has_batch = batch_cache[row.item_code]
+
+			if has_batch and not row.batch_no:
+				frappe.throw(
+					_("Row #{0}: Batch No. is mandatory for batch-tracked item {1}.").format(
+						row.idx, frappe.bold(row.item_code)
+					)
+				)
+
+			if row.batch_no:
+				batch_item = frappe.db.get_value("Batch", row.batch_no, "item")
+				if batch_item and batch_item != row.item_code:
+					frappe.throw(
+						_("Row #{0}: Batch {1} does not belong to item {2}.").format(
+							row.idx, frappe.bold(row.batch_no), frappe.bold(row.item_code)
+						)
+					)
+
+			if flt(row.counted_qty) < 0:
+				frappe.throw(_("Row #{0}: Counted Qty cannot be negative.").format(row.idx))
 
 	def set_status(self):
 		if self.docstatus == 2:
@@ -249,16 +283,18 @@ def make_inventory_posting(source_name, company=None):
 	sr.set_posting_time = 1
 
 	for r in counted_rows:
-		sr.append(
-			"items",
-			{
-				"item_code": r.item_code,
-				"warehouse": r.warehouse,
-				"batch_no": r.batch_no,
-				"qty": flt(r.counted_qty),
-				"valuation_rate": flt(r.valuation_rate),
-			},
-		)
+		item_row = {
+			"item_code": r.item_code,
+			"warehouse": r.warehouse,
+			"qty": flt(r.counted_qty),
+			"valuation_rate": flt(r.valuation_rate),
+		}
+		if r.batch_no:
+			item_row["batch_no"] = r.batch_no
+			# tell ERPNext (v14/v15) to honour the plain batch_no field instead of
+			# requiring a Serial and Batch Bundle to be created up-front
+			item_row["use_serial_batch_fields"] = 1
+		sr.append("items", item_row)
 
 	sr.flags.ignore_permissions = True
 	sr.insert()
