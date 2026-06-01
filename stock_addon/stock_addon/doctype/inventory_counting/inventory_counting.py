@@ -75,6 +75,8 @@ class InventoryCounting(Document):
 		stock-UoM terms, so the variance and its value are consistent.
 		"""
 		rate_cache = {}
+		total_qty = 0.0
+		total_value = 0.0
 		for row in self.items:
 			cf = flt(row.conversion_factor) or 1.0
 			# counted qty (count UoM) -> stock UoM
@@ -94,6 +96,12 @@ class InventoryCounting(Document):
 			else:
 				row.selling_rate = 0
 			row.variance_value = flt(row.variance) * flt(row.selling_rate)
+
+			total_qty += flt(row.variance)
+			total_value += flt(row.variance_value)
+
+		self.total_variance_qty = total_qty
+		self.total_variance_value = total_value
 
 	def validate_batches(self):
 		"""Where the item is batch-tracked a batch must be supplied and must belong

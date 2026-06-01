@@ -28,6 +28,7 @@ frappe.ui.form.on("Inventory Counting", {
 
 	refresh(frm) {
 		setup_variance_highlight(frm);
+		update_totals(frm);
 
 		// Print only the variance rows, valued at selling price
 		if (!frm.is_new()) {
@@ -131,6 +132,9 @@ frappe.ui.form.on("Inventory Counting Item", {
 	counted(frm, cdt, cdn) {
 		compute_variance(cdt, cdn);
 	},
+	items_remove(frm) {
+		update_totals(frm);
+	},
 });
 
 // Fetch the stock-UoM-per-1-count-UoM conversion factor for a row
@@ -182,7 +186,20 @@ function compute_variance(cdt, cdn) {
 	frappe.model.set_value(cdt, cdn, "variance", variance).then(() => {
 		frappe.model.set_value(cdt, cdn, "variance_value", variance * flt(row.selling_rate));
 		tint_variance_rows(cur_frm);
+		update_totals(cur_frm);
 	});
+}
+
+// Roll the row variances up into the header totals
+function update_totals(frm) {
+	let qty = 0;
+	let value = 0;
+	(frm.doc.items || []).forEach((row) => {
+		qty += flt(row.variance);
+		value += flt(row.variance_value);
+	});
+	frm.set_value("total_variance_qty", qty);
+	frm.set_value("total_variance_value", value);
 }
 
 // Pull the selling price for a row so Selling Rate / Variance Value populate
@@ -240,17 +257,25 @@ function set_as_not_counted(frm) {
 	(frm.doc.items || []).forEach((row) => {
 		frappe.model.set_value(row.doctype, row.name, "counted", 0);
 		frappe.model.set_value(row.doctype, row.name, "counted_qty", 0);
+		frappe.model.set_value(row.doctype, row.name, "stock_qty", 0);
 		frappe.model.set_value(row.doctype, row.name, "variance", 0);
+		frappe.model.set_value(row.doctype, row.name, "variance_value", 0);
 	});
+	update_totals(frm);
 	frappe.show_alert(__("All rows set as Not Counted"));
 }
 
 function copy_in_whse_qty(frm) {
 	(frm.doc.items || []).forEach((row) => {
+		const cf = flt(row.conversion_factor) || 1;
 		frappe.model.set_value(row.doctype, row.name, "counted", 1);
-		frappe.model.set_value(row.doctype, row.name, "counted_qty", flt(row.in_warehouse_qty));
+		// keep zero variance: counted (count UoM) = on-hand (stock UoM) / cf
+		frappe.model.set_value(row.doctype, row.name, "counted_qty", flt(row.in_warehouse_qty) / cf);
+		frappe.model.set_value(row.doctype, row.name, "stock_qty", flt(row.in_warehouse_qty));
 		frappe.model.set_value(row.doctype, row.name, "variance", 0);
+		frappe.model.set_value(row.doctype, row.name, "variance_value", 0);
 	});
+	update_totals(frm);
 	frappe.show_alert(__("Copied In-Whse Qty into Counted Qty"));
 }
 
@@ -308,6 +333,7 @@ function open_add_items_dialog(frm) {
 					});
 					frm.refresh_field("items");
 					tint_variance_rows(frm);
+					update_totals(frm);
 					frappe.show_alert(__("Added {0} item(s)", [added]));
 					d.hide();
 				},

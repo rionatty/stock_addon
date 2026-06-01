@@ -23,6 +23,10 @@
   "price_list",
   "items_section",
   "items",
+  "totals_section",
+  "total_variance_qty",
+  "column_break_totals",
+  "total_variance_value",
   "posting_section",
   "stock_reconciliation",
   "remarks_section",
@@ -134,6 +138,30 @@
    "fieldtype": "Table",
    "label": "Items",
    "options": "Inventory Counting Item"
+  },
+  {
+   "fieldname": "totals_section",
+   "fieldtype": "Section Break",
+   "label": "Variance Totals"
+  },
+  {
+   "default": "0",
+   "description": "Sum of row variances in stock UoM.",
+   "fieldname": "total_variance_qty",
+   "fieldtype": "Float",
+   "label": "Total Variance Qty (Stock UoM)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_totals",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "total_variance_value",
+   "fieldtype": "Currency",
+   "label": "Total Variance Value (Selling)",
+   "read_only": 1
   },
   {
    "fieldname": "posting_section",
