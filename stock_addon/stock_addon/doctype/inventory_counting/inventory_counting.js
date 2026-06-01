@@ -8,6 +8,13 @@ frappe.ui.form.on("Inventory Counting", {
 			const row = locals[cdt][cdn];
 			return { filters: { item: row.item_code || "" } };
 		});
+
+		// default the variance valuation price list to the selling default
+		if (frm.is_new() && !frm.doc.price_list) {
+			frappe.db.get_single_value("Selling Settings", "selling_price_list").then((pl) => {
+				if (pl && !frm.doc.price_list) frm.set_value("price_list", pl);
+			});
+		}
 	},
 
 	refresh(frm) {
@@ -73,11 +80,17 @@ frappe.ui.form.on("Inventory Counting", {
 		// Re-pull on-hand qty for all rows when the count date changes
 		(frm.doc.items || []).forEach((row) => fetch_in_warehouse_qty(frm, row));
 	},
+
+	price_list(frm) {
+		// Re-value all rows against the newly chosen selling price list
+		(frm.doc.items || []).forEach((row) => fetch_selling_rate(frm, row));
+	},
 });
 
 frappe.ui.form.on("Inventory Counting Item", {
 	item_code(frm, cdt, cdn) {
 		fetch_in_warehouse_qty(frm, locals[cdt][cdn]);
+		fetch_selling_rate(frm, locals[cdt][cdn]);
 	},
 	warehouse(frm, cdt, cdn) {
 		fetch_in_warehouse_qty(frm, locals[cdt][cdn]);
@@ -121,7 +134,22 @@ function compute_variance(cdt, cdn) {
 	const row = locals[cdt][cdn];
 	const variance = row.counted ? flt(row.counted_qty) - flt(row.in_warehouse_qty) : 0;
 	frappe.model.set_value(cdt, cdn, "variance", variance).then(() => {
+		frappe.model.set_value(cdt, cdn, "variance_value", variance * flt(row.selling_rate));
 		tint_variance_rows(cur_frm);
+	});
+}
+
+// Pull the selling price for a row so Selling Rate / Variance Value populate
+// immediately, instead of only on save.
+function fetch_selling_rate(frm, row) {
+	if (!row.item_code) return;
+	frappe.call({
+		method: "stock_addon.stock_addon.doctype.inventory_counting.inventory_counting.get_selling_rate",
+		args: { item_code: row.item_code, price_list: frm.doc.price_list },
+		callback(r) {
+			frappe.model.set_value(row.doctype, row.name, "selling_rate", flt(r.message));
+			compute_variance(row.doctype, row.name);
+		},
 	});
 }
 
@@ -213,6 +241,7 @@ function open_add_items_dialog(frm) {
 					item_group: values.item_group,
 					count_date: frm.doc.count_date,
 					include_zero_qty: values.include_zero_qty ? 1 : 0,
+					price_list: frm.doc.price_list,
 				},
 				freeze: true,
 				callback(r) {

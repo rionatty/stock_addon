@@ -188,18 +188,25 @@ def get_selling_rate(item_code, price_list=None):
 
 	price_list = price_list or frappe.db.get_single_value("Selling Settings", "selling_price_list")
 
+	def latest_price(filters):
+		# pick the most recent valid Item Price (there can be several per item
+		# differing by uom / qty / customer / validity)
+		rows = frappe.get_all(
+			"Item Price",
+			filters=filters,
+			fields=["price_list_rate"],
+			order_by="valid_from desc, modified desc",
+			limit=1,
+		)
+		return rows[0].price_list_rate if rows else None
+
 	rate = None
 	if price_list:
-		rate = frappe.db.get_value(
-			"Item Price",
-			{"item_code": item_code, "selling": 1, "price_list": price_list},
-			"price_list_rate",
-		)
+		rate = latest_price({"item_code": item_code, "selling": 1, "price_list": price_list})
 	if not rate:
-		rate = frappe.db.get_value(
-			"Item Price", {"item_code": item_code, "selling": 1}, "price_list_rate"
-		)
+		rate = latest_price({"item_code": item_code, "selling": 1})
 	if not rate:
+		# last resort: item master selling rate
 		rate = frappe.db.get_value("Item", item_code, "standard_rate")
 
 	return flt(rate)
@@ -209,7 +216,9 @@ def get_selling_rate(item_code, price_list=None):
 # Add Items
 # ---------------------------------------------------------------------- #
 @frappe.whitelist()
-def get_items_for_count(warehouse=None, item_group=None, count_date=None, include_zero_qty=0):
+def get_items_for_count(
+	warehouse=None, item_group=None, count_date=None, include_zero_qty=0, price_list=None
+):
 	"""Build the list of rows for the "Add Items" action.
 
 	Pulls every item that currently has a Bin in the chosen warehouse (optionally
@@ -271,6 +280,8 @@ def get_items_for_count(warehouse=None, item_group=None, count_date=None, includ
 				)
 			]
 
+		selling_rate = get_selling_rate(b.item_code, price_list)
+
 		batch_keys = batch_nos or [None]
 		for batch_no in batch_keys:
 			snapshot = get_stock_as_on(b.item_code, b.warehouse, count_date, batch_no)
@@ -285,9 +296,11 @@ def get_items_for_count(warehouse=None, item_group=None, count_date=None, includ
 					"uom": item.get("stock_uom"),
 					"in_warehouse_qty": snapshot["qty"],
 					"valuation_rate": snapshot["valuation_rate"],
+					"selling_rate": selling_rate,
 					"counted": 0,
 					"counted_qty": 0,
 					"variance": 0,
+					"variance_value": 0,
 				}
 			)
 	return rows
