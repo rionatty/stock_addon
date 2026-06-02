@@ -345,14 +345,18 @@ def get_items_for_count(
 		conditions.append("b.warehouse = %(warehouse)s")
 		values["warehouse"] = warehouse
 
-	join = ""
+	# Always restrict to items whose Item Group is flagged for van selling
+	# (custom_van_sell = 1) — same rule the Sales Invoice / Sales Order / Material
+	# Request flows use, so the count only ever lists sellable van stock.
+	join = "JOIN `tabItem` i ON b.item_code = i.name JOIN `tabItem Group` ig ON i.item_group = ig.name"
+	conditions.append("ig.custom_van_sell = 1")
+
 	if item_group:
-		ig = frappe.db.get_value("Item Group", item_group, ["lft", "rgt"], as_dict=True)
-		if ig:
-			join = "JOIN `tabItem` i ON b.item_code = i.name JOIN `tabItem Group` ig ON i.item_group = ig.name"
+		sub = frappe.db.get_value("Item Group", item_group, ["lft", "rgt"], as_dict=True)
+		if sub:
 			conditions.append("ig.lft >= %(lft)s AND ig.rgt <= %(rgt)s")
-			values["lft"] = ig.lft
-			values["rgt"] = ig.rgt
+			values["lft"] = sub.lft
+			values["rgt"] = sub.rgt
 
 	bins = frappe.db.sql(
 		f"""
