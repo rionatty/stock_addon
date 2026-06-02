@@ -10,6 +10,7 @@ from frappe.utils import flt, getdate, nowdate
 class InventoryCounting(Document):
 	def validate(self):
 		self.set_default_price_list()
+		self.default_item_warehouse()
 		self.refresh_in_warehouse_qty()
 		self.set_uom_and_conversion()
 		self.calculate_variance()
@@ -45,6 +46,17 @@ class InventoryCounting(Document):
 	def set_default_price_list(self):
 		if not self.price_list:
 			self.price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list")
+
+	def default_item_warehouse(self):
+		"""Items inherit the header warehouse when one isn't set on the row.
+
+		This keeps the mobile app simple: the count is created for a warehouse,
+		and any rows added (including extras found by the rep) belong to it."""
+		if not self.warehouse:
+			return
+		for row in self.items:
+			if not row.warehouse:
+				row.warehouse = self.warehouse
 
 	def on_submit(self):
 		self.db_set("status", "Closed")

@@ -9,6 +9,7 @@
   "naming_series",
   "count_date",
   "count_time",
+  "warehouse",
   "column_break_head",
   "status",
   "ref_2",
@@ -53,6 +54,15 @@
    "fieldname": "count_time",
    "fieldtype": "Time",
    "label": "Time"
+  },
+  {
+   "description": "Warehouse being counted. The mobile app shows this count to the rep assigned to this warehouse.",
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Warehouse",
+   "options": "Warehouse"
   },
   {
    "fieldname": "column_break_head",
