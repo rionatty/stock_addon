@@ -7,21 +7,23 @@
  "engine": "InnoDB",
  "field_order": [
   "naming_series",
+  "details_section",
   "count_date",
   "count_time",
   "warehouse",
   "column_break_head",
-  "status",
-  "ref_2",
-  "end_of_fiscal_year",
-  "referenced_document",
-  "amended_from",
-  "counter_section",
   "counting_type",
   "counter_party_type",
   "inventory_counter",
   "column_break_counter",
+  "status",
   "price_list",
+  "counter_section",
+  "ref_2",
+  "end_of_fiscal_year",
+  "referenced_document",
+  "column_break_ref",
+  "amended_from",
   "items_section",
   "items",
   "totals_section",
@@ -41,6 +43,11 @@
    "label": "Series",
    "options": "INV-CNT-.YYYY.-",
    "reqd": 1
+  },
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Counting Details"
   },
   {
    "default": "Today",
@@ -94,6 +101,10 @@
    "label": "Referenced Document"
   },
   {
+   "fieldname": "column_break_ref",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "amended_from",
    "fieldtype": "Link",
    "label": "Amended From",
@@ -103,9 +114,11 @@
    "read_only": 1
   },
   {
+   "collapsible": 1,
+   "collapsible_depends_on": "eval:doc.ref_2 || doc.referenced_document || doc.end_of_fiscal_year",
    "fieldname": "counter_section",
    "fieldtype": "Section Break",
-   "label": "Counting"
+   "label": "References"
   },
   {
    "default": "Single Counter",
@@ -174,8 +187,10 @@
    "read_only": 1
   },
   {
+   "collapsible": 1,
    "fieldname": "posting_section",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "Inventory Posting"
   },
   {
    "fieldname": "stock_reconciliation",
@@ -186,8 +201,10 @@
    "read_only": 1
   },
   {
+   "collapsible": 1,
    "fieldname": "remarks_section",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "Remarks"
   },
   {
    "fieldname": "remarks",

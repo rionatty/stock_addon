@@ -103,6 +103,13 @@ doctype_list_js = {
 # before_app_uninstall = "stock_addon.utils.before_app_uninstall"
 # after_app_uninstall = "stock_addon.utils.after_app_uninstall"
 
+# Migration
+# ---------
+# Inject the Inventory Counting link into the standard Stock workspace
+after_migrate = [
+    "stock_addon.stock_addon.workspace_setup.add_inventory_counting_to_stock_workspace"
+]
+
 # Desk Notifications
 # ------------------
 # See frappe.core.notifications.get_notification_config
