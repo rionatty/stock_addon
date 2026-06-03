@@ -86,6 +86,17 @@ frappe.ui.form.on("Inventory Counting", {
 		}
 	},
 
+	warehouse(frm) {
+		// Header warehouse is the default for every row. Backfill rows that have
+		// no warehouse yet (and re-pull their on-hand qty).
+		if (!frm.doc.warehouse) return;
+		(frm.doc.items || []).forEach((row) => {
+			if (!row.warehouse) {
+				frappe.model.set_value(row.doctype, row.name, "warehouse", frm.doc.warehouse);
+			}
+		});
+	},
+
 	count_date(frm) {
 		// Re-pull on-hand qty for all rows when the count date changes
 		(frm.doc.items || []).forEach((row) => fetch_in_warehouse_qty(frm, row));
@@ -98,6 +109,13 @@ frappe.ui.form.on("Inventory Counting", {
 });
 
 frappe.ui.form.on("Inventory Counting Item", {
+	items_add(frm, cdt, cdn) {
+		// New rows default to the header warehouse so the rep/back office
+		// doesn't have to retype it for every line.
+		if (frm.doc.warehouse) {
+			frappe.model.set_value(cdt, cdn, "warehouse", frm.doc.warehouse);
+		}
+	},
 	item_code(frm, cdt, cdn) {
 		const row = locals[cdt][cdn];
 		// reset UoM to the item's stock UoM on item change
@@ -289,6 +307,7 @@ function open_add_items_dialog(frm) {
 				label: __("Warehouse"),
 				options: "Warehouse",
 				reqd: 1,
+				default: frm.doc.warehouse || "",
 			},
 			{
 				fieldtype: "Link",
