@@ -116,25 +116,17 @@ class InventoryCounting(Document):
 		self.total_variance_value = total_value
 
 	def validate_batches(self):
-		"""Where the item is batch-tracked a batch must be supplied and must belong
-		to the item; counted quantities may not be negative."""
-		batch_cache = {}
+		"""Validate batch references and counted quantities.
+
+		A batch is NOT required at this stage: the count is initialised in the
+		back office (often before any batch is known) and the batch is picked
+		later during counting on the device. When the count is posted to
+		inventory the batch becomes mandatory (see make_inventory_posting).
+		Here we only ensure that any batch supplied belongs to the item, and
+		that counted quantities are not negative."""
 		for row in self.items:
 			if not row.item_code:
 				continue
-
-			if row.item_code not in batch_cache:
-				batch_cache[row.item_code] = frappe.db.get_value(
-					"Item", row.item_code, "has_batch_no"
-				)
-			has_batch = batch_cache[row.item_code]
-
-			if has_batch and not row.batch_no:
-				frappe.throw(
-					_("Row #{0}: Batch No. is mandatory for batch-tracked item {1}.").format(
-						row.idx, frappe.bold(row.item_code)
-					)
-				)
 
 			if row.batch_no:
 				batch_item = frappe.db.get_value("Batch", row.batch_no, "item")
@@ -446,6 +438,16 @@ def make_inventory_posting(source_name, company=None):
 	counted_rows = [r for r in doc.items if r.counted]
 	if not counted_rows:
 		frappe.throw(_("No counted rows to post. Tick 'Counted' and enter a Counted Qty first."))
+
+	# Batch is only mandatory at posting time: a batch-tracked item cannot be
+	# reconciled without naming the batch.
+	for r in counted_rows:
+		if frappe.db.get_value("Item", r.item_code, "has_batch_no") and not r.batch_no:
+			frappe.throw(
+				_("Row #{0}: Batch No. is required to post batch-tracked item {1} to inventory.").format(
+					r.idx, frappe.bold(r.item_code)
+				)
+			)
 
 	company = company or frappe.defaults.get_user_default("Company")
 
