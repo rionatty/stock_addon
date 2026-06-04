@@ -127,3 +127,14 @@ def _fieldname(col):
 	if isinstance(col, str) and ":" in col:
 		return frappe.scrub(col.split(":", 1)[0])
 	return None
+
+
+@frappe.whitelist()
+def get_pdf_html(filters, data, columns=None):
+	"""Print-ready HTML for the report's Print PDF button (shared style).
+
+	Columns are passed from the client (they are built by the standard GL report
+	at run time), so the printout matches exactly what is on screen."""
+	from stock_addon.stock_addon.report.report_print_utils import render_report_pdf
+
+	return render_report_pdf("General Ledger Running Balance", filters, columns or [], data)

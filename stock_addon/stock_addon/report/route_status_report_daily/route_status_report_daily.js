@@ -44,4 +44,32 @@ frappe.query_reports["Route Status Report Daily"] = {
 		}
 		return value;
 	},
+
+	onload: function (report) {
+		report.page.add_inner_button(__("Print PDF"), function () {
+			const data = report.data || [];
+			if (!data.length) {
+				frappe.msgprint(__("Run the report first."));
+				return;
+			}
+			frappe.call({
+				method: "stock_addon.stock_addon.report.route_status_report_daily.route_status_report_daily.get_pdf_html",
+				args: {
+					filters: JSON.stringify(report.get_values()),
+					data: JSON.stringify(data),
+					columns: JSON.stringify(report.columns || []),
+				},
+				freeze: true,
+				freeze_message: __("Generating PDF..."),
+				callback: function (r) {
+					if (r.message) {
+						const w = window.open();
+						w.document.write(r.message);
+						w.document.close();
+						setTimeout(() => w.print(), 600);
+					}
+				},
+			});
+		}).addClass("btn-primary");
+	},
 };

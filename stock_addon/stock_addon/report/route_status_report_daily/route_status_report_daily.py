@@ -284,3 +284,11 @@ def get_banking(filters):
 		values,
 		as_dict=True,
 	)
+
+
+@frappe.whitelist()
+def get_pdf_html(filters, data, columns=None):
+	"""Print-ready HTML for the report's Print PDF button (shared style)."""
+	from stock_addon.stock_addon.report.report_print_utils import render_report_pdf
+
+	return render_report_pdf("Route Status Report (Daily)", filters, columns or get_columns(), data)
