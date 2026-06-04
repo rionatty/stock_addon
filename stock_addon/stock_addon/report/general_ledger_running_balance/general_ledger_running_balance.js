@@ -1,6 +1,8 @@
 // Copyright (c) 2026, mohtashim and contributors
 // For license information, please see license.txt
 
+// Filters mirror ERPNext's standard General Ledger so the wrapped standard
+// report (which this builds on) receives exactly the inputs it expects.
 frappe.query_reports["General Ledger Running Balance"] = {
 	filters: [
 		{
@@ -17,6 +19,7 @@ frappe.query_reports["General Ledger Running Balance"] = {
 			fieldtype: "Date",
 			default: frappe.datetime.add_months(frappe.datetime.get_today(), -1),
 			reqd: 1,
+			width: "60px",
 		},
 		{
 			fieldname: "to_date",
@@ -24,15 +27,28 @@ frappe.query_reports["General Ledger Running Balance"] = {
 			fieldtype: "Date",
 			default: frappe.datetime.get_today(),
 			reqd: 1,
+			width: "60px",
 		},
 		{
 			fieldname: "account",
 			label: __("Account"),
-			fieldtype: "Link",
+			fieldtype: "MultiSelectList",
 			options: "Account",
-			get_query: () => {
-				const company = frappe.query_report.get_filter_value("company");
-				return { filters: { company: company } };
+			get_data: function (txt) {
+				return frappe.db.get_link_options("Account", txt, {
+					company: frappe.query_report.get_filter_value("company"),
+				});
+			},
+		},
+		{
+			fieldname: "cost_center",
+			label: __("Route / Cost Center"),
+			fieldtype: "MultiSelectList",
+			options: "Cost Center",
+			get_data: function (txt) {
+				return frappe.db.get_link_options("Cost Center", txt, {
+					company: frappe.query_report.get_filter_value("company"),
+				});
 			},
 		},
 		{
@@ -40,6 +56,7 @@ frappe.query_reports["General Ledger Running Balance"] = {
 			label: __("Party Type"),
 			fieldtype: "Link",
 			options: "Party Type",
+			default: "",
 			on_change: function () {
 				frappe.query_report.set_filter_value("party", "");
 			},
@@ -47,14 +64,29 @@ frappe.query_reports["General Ledger Running Balance"] = {
 		{
 			fieldname: "party",
 			label: __("Party"),
-			fieldtype: "Dynamic Link",
-			get_options: function () {
-				const pt = frappe.query_report.get_filter_value("party_type");
-				if (!pt) {
-					frappe.throw(__("Please select Party Type first"));
-				}
-				return pt;
+			fieldtype: "MultiSelectList",
+			get_data: function (txt) {
+				const party_type = frappe.query_report.get_filter_value("party_type");
+				if (!party_type) return [];
+				return frappe.db.get_link_options(party_type, txt);
 			},
+		},
+		{
+			fieldname: "group_by",
+			label: __("Group by"),
+			fieldtype: "Select",
+			options: [
+				"",
+				{ value: "Group by Voucher", label: __("Group by Voucher") },
+				{
+					value: "Group by Voucher (Consolidated)",
+					label: __("Group by Voucher (Consolidated)"),
+				},
+				{ value: "Group by Account", label: __("Group by Account") },
+				{ value: "Group by Party", label: __("Group by Party") },
+			],
+			// blank = one row per GL entry, so the running balance is per entry
+			default: "",
 		},
 		{
 			fieldname: "finance_book",
@@ -63,18 +95,21 @@ frappe.query_reports["General Ledger Running Balance"] = {
 			options: "Finance Book",
 		},
 		{
+			fieldname: "project",
+			label: __("Project"),
+			fieldtype: "MultiSelectList",
+			options: "Project",
+			get_data: function (txt) {
+				return frappe.db.get_link_options("Project", txt, {
+					company: frappe.query_report.get_filter_value("company"),
+				});
+			},
+		},
+		{
 			fieldname: "voucher_no",
 			label: __("Voucher No"),
 			fieldtype: "Data",
+			width: "100px",
 		},
 	],
-
-	// Bold the Opening / Total-Closing summary rows.
-	formatter: function (value, row, column, data, default_formatter) {
-		value = default_formatter(value, row, column, data);
-		if (data && data.is_total) {
-			value = `<span style="font-weight:600">${value}</span>`;
-		}
-		return value;
-	},
 };
