@@ -11,7 +11,8 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/stock_addon/css/stock_addon.css"
-# app_include_js = "/assets/stock_addon/js/stock_addon.js"
+# Patches the standard General Ledger report: party name column + Print PDF button
+app_include_js = "/assets/stock_addon/js/general_ledger_patch.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/stock_addon/css/stock_addon.css"

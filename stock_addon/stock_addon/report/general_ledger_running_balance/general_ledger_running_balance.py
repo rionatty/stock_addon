@@ -32,12 +32,40 @@ def execute(filters=None):
 	columns = list(result[0]) if result and result[0] else []
 	data = result[1] if result and len(result) > 1 else []
 
+	# Remove "Total" and "Closing (Opening + Total)" summary rows that the
+	# standard GL inserts between voucher groups — they clutter the running-
+	# balance view and are misleading when group_by is blank (one row per entry).
+	data = _strip_subtotals(data)
+
 	_add_party_names(data)
 	columns = _arrange_columns(columns)
 
 	# Preserve any extra return values (chart, summary, etc.) from the std report.
 	rest = list(result[2:]) if result and len(result) > 2 else []
 	return tuple([columns, data] + rest)
+
+
+def _strip_subtotals(data):
+	"""Remove the per-voucher Total / Closing rows injected by the standard GL.
+
+	The standard report adds a 'Total' row and a 'Closing (Opening + Total)'
+	row after each voucher group. These are identified by their account label
+	text and by having no posting_date. We keep Opening and Closing Balance
+	rows at the report edges but drop the per-transaction subtotals.
+	"""
+	keep = []
+	for row in data or []:
+		if not isinstance(row, dict):
+			keep.append(row)
+			continue
+		account = (row.get("account") or "").strip()
+		# The standard GL marks these rows by setting account to these labels
+		if account in ("Total", "Closing (Opening + Total)") and not row.get(
+			"posting_date"
+		):
+			continue
+		keep.append(row)
+	return keep
 
 
 def _add_party_names(data):

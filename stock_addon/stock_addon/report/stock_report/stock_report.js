@@ -2,41 +2,76 @@
 // For license information, please see license.txt
 
 frappe.query_reports["Stock Report"] = {
-	"filters": [
+	filters: [
 		{
-			"fieldname": "from_date",
-			"label": "From Date",
-			"fieldtype": "Date",
-			"width": 120,
-			"default": frappe.datetime.get_today()
+			fieldname: "company",
+			label: __("Company"),
+			fieldtype: "Link",
+			options: "Company",
+			default: frappe.defaults.get_user_default("Company"),
 		},
 		{
-			"fieldname": "to_date",
-			"label": "To Date",
-			"fieldtype": "Date",
-			"width": 120,
-			"default": frappe.datetime.get_today()
+			fieldname: "from_date",
+			label: __("From Date"),
+			fieldtype: "Date",
+			default: frappe.datetime.get_today(),
+			reqd: 1,
 		},
 		{
-			"fieldname": "warehouse",
-			"label": "Warehouse",
-			"fieldtype": "Link",
-			"options": "Warehouse",
-			"width": 120
+			fieldname: "to_date",
+			label: __("To Date"),
+			fieldtype: "Date",
+			default: frappe.datetime.get_today(),
+			reqd: 1,
 		},
 		{
-			"fieldname": "item_group",
-			"label": "Item Group",
-			"fieldtype": "Link",
-			"options": "Item Group",
-			"width": 120
+			fieldname: "warehouse",
+			label: __("Warehouse"),
+			fieldtype: "Link",
+			options: "Warehouse",
+			get_query: () => ({
+				filters: { company: frappe.query_report.get_filter_value("company") },
+			}),
 		},
 		{
-			"fieldname": "item_code",
-			"label": "Item",
-			"fieldtype": "Link",
-			"options": "Item",
-			"width": 120
-		}
-	]
+			fieldname: "item_group",
+			label: __("Item Group"),
+			fieldtype: "Link",
+			options: "Item Group",
+		},
+		{
+			fieldname: "item_code",
+			label: __("Item"),
+			fieldtype: "Link",
+			options: "Item",
+		},
+	],
+
+	onload: function (report) {
+		report.page.add_inner_button(__("Print PDF"), function () {
+			const data = report.data || [];
+			if (!data.length) {
+				frappe.msgprint(__("Run the report first."));
+				return;
+			}
+			frappe.call({
+				method: "stock_addon.stock_addon.report.stock_report.stock_report.get_pdf_html",
+				args: {
+					filters: JSON.stringify(report.get_values()),
+					data: JSON.stringify(data),
+					columns: JSON.stringify(report.columns || []),
+				},
+				freeze: true,
+				freeze_message: __("Generating PDF..."),
+				callback: function (r) {
+					if (r.message) {
+						const w = window.open();
+						w.document.write(r.message);
+						w.document.close();
+						setTimeout(() => w.print(), 600);
+					}
+				},
+			});
+		}).addClass("btn-primary");
+	},
 };
