@@ -8,7 +8,7 @@ from collections import defaultdict
 import frappe
 from frappe import _
 from frappe.query_builder.functions import CombineDatetime, Sum
-from frappe.utils import cint, flt, get_datetime
+from frappe.utils import cint, flt, formatdate, get_datetime
 
 from erpnext.stock.doctype.inventory_dimension.inventory_dimension import get_inventory_dimensions
 from erpnext.stock.doctype.serial_no.serial_no import get_serial_nos
@@ -99,6 +99,11 @@ def execute(filters=None):
 			conversion_factors.append(item_detail.conversion_factor)
 
 	update_included_uom_in_report(columns, data, include_uom, conversion_factors)
+
+	if filters.get("group_by") == "Monthly":
+		columns = get_monthly_columns(filters)
+		data = group_by_month(data)
+
 	return columns, data
 
 
@@ -615,3 +620,124 @@ def check_inventory_dimension_filters_applied(filters) -> bool:
 			return True
 
 	return False
+
+
+def get_monthly_columns(filters):
+	"""Columns for the Monthly grouping view (one row per item + warehouse + month)."""
+	return [
+		{"label": _("Month"), "fieldname": "month", "fieldtype": "Data", "width": 110},
+		{
+			"label": _("Item"),
+			"fieldname": "item_code",
+			"fieldtype": "Link",
+			"options": "Item",
+			"width": 120,
+		},
+		{"label": _("Item Name"), "fieldname": "item_name", "width": 160},
+		{
+			"label": _("Stock UOM"),
+			"fieldname": "stock_uom",
+			"fieldtype": "Link",
+			"options": "UOM",
+			"width": 90,
+		},
+		{
+			"label": _("Warehouse"),
+			"fieldname": "warehouse",
+			"fieldtype": "Link",
+			"options": "Warehouse",
+			"width": 160,
+		},
+		{"label": _("In Qty"), "fieldname": "in_qty", "fieldtype": "Float", "width": 90},
+		{"label": _("Out Qty"), "fieldname": "out_qty", "fieldtype": "Float", "width": 90},
+		{"label": _("Net Qty"), "fieldname": "net_qty", "fieldtype": "Float", "width": 90},
+		{
+			"label": _("Closing Balance"),
+			"fieldname": "qty_after_transaction",
+			"fieldtype": "Float",
+			"width": 120,
+		},
+		{
+			"label": _("Item Group"),
+			"fieldname": "item_group",
+			"fieldtype": "Link",
+			"options": "Item Group",
+			"width": 110,
+		},
+		{
+			"label": _("Brand"),
+			"fieldname": "brand",
+			"fieldtype": "Link",
+			"options": "Brand",
+			"width": 100,
+		},
+		{
+			"label": _("Company"),
+			"fieldname": "company",
+			"fieldtype": "Link",
+			"options": "Company",
+			"width": 110,
+		},
+	]
+
+
+def group_by_month(data):
+	"""Aggregate ledger rows into one row per (item, warehouse, month).
+
+	In/Out qty are summed for the month and Net = In + Out. Closing Balance is
+	the running balance (qty_after_transaction) of the last entry in the month
+	for that item + warehouse, so it reflects the stock on hand at month end.
+	"""
+	groups = {}
+	for row in data:
+		posting = row.get("date")
+		if not posting:
+			# the 'Opening' row has no date; it's already baked into the
+			# running balance, so it needs no monthly bucket of its own
+			continue
+
+		dt = get_datetime(posting)
+		key = (row.get("item_code"), row.get("warehouse"), dt.year, dt.month)
+
+		g = groups.get(key)
+		if g is None:
+			month_start = f"{dt.year}-{dt.month:02d}-01"
+			g = {
+				"month": formatdate(month_start, "MMM yyyy"),
+				"_sort": (dt.year, dt.month),
+				"item_code": row.get("item_code"),
+				"item_name": row.get("item_name"),
+				"stock_uom": row.get("stock_uom"),
+				"warehouse": row.get("warehouse"),
+				"item_group": row.get("item_group"),
+				"brand": row.get("brand"),
+				"company": row.get("company"),
+				"in_qty": 0.0,
+				"out_qty": 0.0,
+				"net_qty": 0.0,
+				"qty_after_transaction": 0.0,
+				"_last_dt": None,
+			}
+			groups[key] = g
+
+		g["in_qty"] += flt(row.get("in_qty"))
+		g["out_qty"] += flt(row.get("out_qty"))
+
+		if g["_last_dt"] is None or dt >= g["_last_dt"]:
+			g["_last_dt"] = dt
+			g["qty_after_transaction"] = flt(row.get("qty_after_transaction"))
+
+	result = list(groups.values())
+	for g in result:
+		g["net_qty"] = g["in_qty"] + g["out_qty"]
+
+	# month-primary ordering across the period, then item, then warehouse
+	result.sort(
+		key=lambda r: (r["_sort"][0], r["_sort"][1], r.get("item_code") or "", r.get("warehouse") or "")
+	)
+
+	for g in result:
+		g.pop("_sort", None)
+		g.pop("_last_dt", None)
+
+	return result

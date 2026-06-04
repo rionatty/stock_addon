@@ -26,6 +26,13 @@ frappe.query_reports["Stock Ledger Report"] = {
 			reqd: 1,
 		},
 		{
+			fieldname: "group_by",
+			label: __("Group By"),
+			fieldtype: "Select",
+			options: "Ledger\nMonthly",
+			default: "Ledger",
+		},
+		{
 			fieldname: "warehouse",
 			label: __("Warehouse"),
 			fieldtype: "Link",
