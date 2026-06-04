@@ -427,13 +427,7 @@ class StockBalanceReport:
 					"options": "UOM",
 					"width": 90,
 				},
-				{
-					"label": _("Balance Qty"),
-					"fieldname": "bal_qty",
-					"fieldtype": "Float",
-					"width": 100,
-					"convertible": "qty",
-				},
+				# Ordered: Opening -> In -> Out -> Closing
 				{
 					"label": _("Opening Qty"),
 					"fieldname": "opening_qty",
@@ -445,14 +439,21 @@ class StockBalanceReport:
 					"label": _("In Qty"),
 					"fieldname": "in_qty",
 					"fieldtype": "Float",
-					"width": 80,
+					"width": 90,
 					"convertible": "qty",
 				},
 				{
 					"label": _("Out Qty"),
 					"fieldname": "out_qty",
 					"fieldtype": "Float",
-					"width": 80,
+					"width": 90,
+					"convertible": "qty",
+				},
+				{
+					"label": _("Closing Qty"),
+					"fieldname": "bal_qty",
+					"fieldtype": "Float",
+					"width": 100,
 					"convertible": "qty",
 				},
 				{
