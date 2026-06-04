@@ -11,8 +11,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/stock_addon/css/stock_addon.css"
-# Patches the standard General Ledger report: party name column + Print PDF button
-app_include_js = "/assets/stock_addon/js/general_ledger_patch.js"
+# app_include_js = "/assets/stock_addon/js/stock_addon.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/stock_addon/css/stock_addon.css"
@@ -109,6 +108,15 @@ doctype_list_js = {
 # Inject the Inventory Counting link into the standard Stock workspace
 after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_inventory_counting_to_stock_workspace"
+]
+
+# Fixtures — installed/updated on bench migrate (no bench build needed)
+# Client Script patches the standard General Ledger report: party name + Print PDF + remove subtotals
+fixtures = [
+    {
+        "dt": "Client Script",
+        "filters": [["name", "=", "General Ledger Party Name and Print PDF"]]
+    }
 ]
 
 # Desk Notifications
