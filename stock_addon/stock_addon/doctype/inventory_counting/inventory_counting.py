@@ -118,12 +118,10 @@ class InventoryCounting(Document):
 	def validate_batches(self):
 		"""Validate batch references and counted quantities.
 
-		A batch is NOT required at this stage: the count is initialised in the
-		back office (often before any batch is known) and the batch is picked
-		later during counting on the device. When the count is posted to
-		inventory the batch becomes mandatory (see make_inventory_posting).
-		Here we only ensure that any batch supplied belongs to the item, and
-		that counted quantities are not negative."""
+		A batch is NOT required at any stage — neither at save nor at posting.
+		The back office reconciles counts in bulk and batch tracking is
+		corrected separately. Here we only ensure that any batch supplied
+		belongs to the item, and that counted quantities are not negative."""
 		for row in self.items:
 			if not row.item_code:
 				continue
@@ -439,15 +437,9 @@ def make_inventory_posting(source_name, company=None):
 	if not counted_rows:
 		frappe.throw(_("No counted rows to post. Tick 'Counted' and enter a Counted Qty first."))
 
-	# Batch is only mandatory at posting time: a batch-tracked item cannot be
-	# reconciled without naming the batch.
-	for r in counted_rows:
-		if frappe.db.get_value("Item", r.item_code, "has_batch_no") and not r.batch_no:
-			frappe.throw(
-				_("Row #{0}: Batch No. is required to post batch-tracked item {1} to inventory.").format(
-					r.idx, frappe.bold(r.item_code)
-				)
-			)
+	# Batch is no longer mandatory on the count — back office can post even
+	# for batch-tracked items without a batch (matches the workflow where
+	# counts are reconciled in bulk and batch tracking is corrected later).
 
 	company = company or frappe.defaults.get_user_default("Company")
 
