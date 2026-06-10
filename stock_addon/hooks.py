@@ -111,13 +111,41 @@ after_migrate = [
 ]
 
 # Fixtures — installed/updated on bench migrate (no bench build needed)
-# Client Script patches the standard General Ledger report: party name + Print PDF + remove subtotals
+# - Client Script patches the standard General Ledger report: party name +
+#   Print PDF + remove subtotals.
+# - Custom Fields add:
+#     • Stock Entry Detail.custom_sales_price (Currency) — copied from MR
+#     • Material Request.custom_user / Stock Entry.custom_user (User column)
 fixtures = [
     {
         "dt": "Client Script",
         "filters": [["name", "=", "General Ledger Party Name and Print PDF"]]
-    }
+    },
+    {
+        "dt": "Custom Field",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    "Stock Entry Detail-custom_sales_price",
+                    "Material Request-custom_user",
+                    "Stock Entry-custom_user",
+                ],
+            ]
+        ]
+    },
 ]
+
+# Doc Events — wired hooks
+# ------------------------
+# Stock Entry: fetch the sales price from the source Material Request line(s)
+# into Stock Entry Detail.custom_sales_price.
+doc_events = {
+    "Stock Entry": {
+        "before_save": "stock_addon.stock_addon.doc_events.stock_entry.copy_sales_price_from_material_request",
+    },
+}
 
 # Desk Notifications
 # ------------------
