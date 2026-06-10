@@ -111,6 +111,10 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_inventory_counting_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_stock_addon_reports_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
+    # Patch the standard General Ledger report's report_script — adds the
+    # Customer/Party Name column, suppresses Frappe's broken auto-footer
+    # total, relabels Balance to Running Balance, and adds Print PDF.
+    "stock_addon.stock_addon.report_patches.apply_general_ledger_patch",
 ]
 
 # Fixtures — installed/updated on bench migrate (no bench build needed)
@@ -120,10 +124,11 @@ after_migrate = [
 #     • Stock Entry Detail.custom_sales_price (Currency) — copied from MR
 #     • Material Request.custom_user / Stock Entry.custom_user (User column)
 fixtures = [
-    {
-        "dt": "Client Script",
-        "filters": [["name", "=", "General Ledger Party Name and Print PDF"]]
-    },
+    # NOTE: the previous Client Script fixture for the standard GL report
+    # was removed — Client Script doesn't support a "page" script_type, so
+    # the patch never ran. The standard GL is now patched by writing to its
+    # Report.report_script field on every migrate
+    # (see report_patches.apply_general_ledger_patch in after_migrate).
     {
         "dt": "Custom Field",
         "filters": [
