@@ -111,11 +111,21 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_inventory_counting_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_stock_addon_reports_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
-    # Patch the standard General Ledger report's report_script — adds the
-    # Customer/Party Name column, suppresses Frappe's broken auto-footer
-    # total, relabels Balance to Running Balance, and adds Print PDF.
-    "stock_addon.stock_addon.report_patches.apply_general_ledger_patch",
 ]
+
+# Server-side override for the standard General Ledger report. Every call to
+# the standard GL goes through our patched execute(), which:
+#   - removes Frappe's auto-footer Total row (sum of running balances was a
+#     meaningless number),
+#   - adds the Customer / Party Name column before Debit,
+#   - relabels the Balance column to Running Balance,
+#   - resolves party names from party or the customer code in "against".
+# No JS / no bench build required — the standard GL just returns the right
+# data every time.
+override_whitelisted_methods = {
+    "erpnext.accounts.report.general_ledger.general_ledger.execute":
+        "stock_addon.stock_addon.report_patches.execute",
+}
 
 # Fixtures — installed/updated on bench migrate (no bench build needed)
 # - Client Script patches the standard General Ledger report: party name +
