@@ -105,9 +105,12 @@ doctype_list_js = {
 
 # Migration
 # ---------
-# Inject the Inventory Counting link into the standard Stock workspace
+# Inject the Inventory Counting link + all Stock Addon reports into the
+# right standard workspaces (idempotent + self-healing on every migrate).
 after_migrate = [
-    "stock_addon.stock_addon.workspace_setup.add_inventory_counting_to_stock_workspace"
+    "stock_addon.stock_addon.workspace_setup.add_inventory_counting_to_stock_workspace",
+    "stock_addon.stock_addon.workspace_setup.add_stock_addon_reports_to_stock_workspace",
+    "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
 ]
 
 # Fixtures — installed/updated on bench migrate (no bench build needed)

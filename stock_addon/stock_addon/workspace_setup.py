@@ -1,6 +1,18 @@
 # Copyright (c) 2026, mohtashim and contributors
 # For license information, please see license.txt
 
+"""Workspace setup — runs on ``after_migrate`` to make sure all Stock Addon
+doctypes and reports are registered under the right standard ERPNext
+workspaces, self-healing if those workspaces are reinstalled.
+
+Reports are grouped by purpose:
+  * Stock workspace  — inventory / movement / counting (Van Stock Movement,
+                       stock_balance/ledger/report, transfer & manufacture
+                       analysis, Inventory Counting doctype).
+  * Accounts workspace — money: AR aging, cash collection, banking, daily
+                         route status, sales analysis, GL running balance.
+"""
+
 import frappe
 
 STOCK_WORKSPACE = "Stock"
@@ -8,6 +20,33 @@ CARD = "Stock Transactions"
 LINK_TO = "Inventory Counting"
 # place the new link right after this transaction in the card
 ANCHOR_AFTER = "Stock Entry"
+
+
+# ─── Report registrations ───────────────────────────────────────────────────
+# Each report is added (idempotently) under a new "Stock Addon Reports" /
+# "Finance — Route & Sales" card on the appropriate workspace.
+
+STOCK_REPORTS = [
+	# (report_name, label shown in the workspace)
+	("Van Stock Movement", "Van Stock Movement"),
+	("Stock Balance Report", "Stock Balance Report"),
+	("Stock Ledger Report", "Stock Ledger Report"),
+	("Stock Report", "Stock Report"),
+	("Stock Transfer and Manufacture Analysis", "Stock Transfer & Manufacture Analysis"),
+]
+
+FINANCE_REPORTS = [
+	("Route Ageing Report", "Route Ageing Report"),
+	("Route Cash Collection and Banking", "Route Cash Collection & Banking"),
+	("Route Status Report Daily", "Route Status Report (Daily)"),
+	("Van Banking Report", "Van Banking Report"),
+	("Sales Report", "Sales Report"),
+	("General Ledger Running Balance", "General Ledger (Running Balance)"),
+]
+
+STOCK_REPORTS_CARD = "Stock Addon Reports"
+FINANCE_REPORTS_CARD = "Route & Sales Reports"
+ACCOUNTS_WORKSPACE = "Accounts"
 
 
 def add_inventory_counting_to_stock_workspace():
@@ -77,3 +116,83 @@ def add_inventory_counting_to_stock_workspace():
 	ws.flags.ignore_permissions = True
 	ws.save()
 	frappe.db.commit()
+
+
+# ─── Generic helpers ────────────────────────────────────────────────────────
+def _ensure_card_with_reports(workspace_name, card_label, reports):
+	"""Idempotently add a Card Break with the given label to the workspace,
+	then append a Report link for each (name, label) in ``reports`` that
+	actually exists and isn't already on the workspace.
+
+	Self-healing: if the workspace was rebuilt and lost the card, we add it
+	again on the next migrate.
+	"""
+	if not frappe.db.exists("Workspace", workspace_name):
+		return
+
+	ws = frappe.get_doc("Workspace", workspace_name)
+	changed = False
+
+	# Find where our card begins. If it doesn't exist, append one + a header
+	# card-break at the end of the workspace.
+	card_start = next(
+		(i for i, l in enumerate(ws.links)
+		 if l.type == "Card Break" and (l.label or "") == card_label),
+		None,
+	)
+	if card_start is None:
+		ws.append("links", {
+			"type": "Card Break",
+			"label": card_label,
+			"icon": "report",
+			"hidden": 0,
+		})
+		card_start = len(ws.links) - 1
+		changed = True
+
+	# Collect every link already on the workspace by report_name so we don't
+	# add the same one twice.
+	present = {
+		(l.link_to or "")
+		for l in ws.links
+		if l.type == "Link" and l.link_type == "Report"
+	}
+
+	for report_name, label in reports:
+		if not frappe.db.exists("Report", report_name):
+			continue
+		if report_name in present:
+			continue
+		ws.append("links", {
+			"type": "Link",
+			"label": label,
+			"link_type": "Report",
+			"link_to": report_name,
+			"is_query_report": 1,
+			"hidden": 0,
+			"onboard": 0,
+		})
+		changed = True
+
+	if not changed:
+		return
+
+	# Re-index idx so the workspace renders in the order we built it.
+	for idx, l in enumerate(ws.links, start=1):
+		l.idx = idx
+
+	ws.flags.ignore_permissions = True
+	ws.save()
+	frappe.db.commit()
+
+
+def add_stock_addon_reports_to_stock_workspace():
+	"""Register inventory / stock reports under the Stock workspace."""
+	_ensure_card_with_reports(STOCK_WORKSPACE, STOCK_REPORTS_CARD, STOCK_REPORTS)
+
+
+def add_route_and_sales_reports_to_accounts_workspace():
+	"""Register money / route / GL reports under the Accounts workspace."""
+	_ensure_card_with_reports(
+		ACCOUNTS_WORKSPACE, FINANCE_REPORTS_CARD, FINANCE_REPORTS
+	)
