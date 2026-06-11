@@ -113,32 +113,25 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
 ]
 
-# Server-side override for the standard General Ledger report. Every call to
-# the standard GL goes through our patched execute(), which:
-#   - removes Frappe's auto-footer Total row (sum of running balances was a
+# Standard GL report is patched server-side via a module-level monkey patch
+# installed in stock_addon/__init__.py — it wraps
+# ``erpnext.accounts.report.general_ledger.general_ledger.execute`` to:
+#   * remove Frappe's auto-footer Total row (sum of running balances was a
 #     meaningless number),
-#   - adds the Customer / Party Name column before Debit,
-#   - relabels the Balance column to Running Balance,
-#   - resolves party names from party or the customer code in "against".
-# No JS / no bench build required — the standard GL just returns the right
-# data every time.
-override_whitelisted_methods = {
-    "erpnext.accounts.report.general_ledger.general_ledger.execute":
-        "stock_addon.stock_addon.report_patches.execute",
-}
+#   * inject a Customer / Party Name column before Debit (resolved from
+#     party_type/party OR the customer code in the "against" column for
+#     cash/bank rows),
+#   * relabel the Balance column to "Running Balance".
+# No JS, no Client Script, no bench build required — every call to the
+# standard GL returns the patched data.
 
-# Fixtures — installed/updated on bench migrate (no bench build needed)
-# - Client Script patches the standard General Ledger report: party name +
-#   Print PDF + remove subtotals.
-# - Custom Fields add:
+# Fixtures — installed/updated on bench migrate (no bench build needed).
+# Files live in stock_addon/fixtures/ (the app-package root, next to this
+# hooks.py) — Frappe only syncs fixtures from there.
+# Custom Fields added:
 #     • Stock Entry Detail.custom_sales_price (Currency) — copied from MR
 #     • Material Request.custom_user / Stock Entry.custom_user (User column)
 fixtures = [
-    # NOTE: the previous Client Script fixture for the standard GL report
-    # was removed — Client Script doesn't support a "page" script_type, so
-    # the patch never ran. The standard GL is now patched by writing to its
-    # Report.report_script field on every migrate
-    # (see report_patches.apply_general_ledger_patch in after_migrate).
     {
         "dt": "Custom Field",
         "filters": [
