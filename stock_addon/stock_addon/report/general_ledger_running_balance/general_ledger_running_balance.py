@@ -15,6 +15,7 @@ running balance, against accounts, cost center, totals/closing — and only:
 
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 from erpnext.accounts.report.general_ledger.general_ledger import (
 	execute as standard_gl_execute,
@@ -24,18 +25,16 @@ from erpnext.accounts.report.general_ledger.general_ledger import (
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
 
-	# Per-entry running balance (not consolidated) unless the user chose otherwise.
-	if not filters.get("group_by"):
-		filters["group_by"] = ""
+	# This report is a per-entry running-balance view: grouping would wrap
+	# every voucher in its own Opening/Total/Closing block and reset the
+	# balance, so the standard group_by is always cleared.
+	filters["group_by"] = ""
 
 	result = standard_gl_execute(filters)
 	columns = list(result[0]) if result and result[0] else []
 	data = result[1] if result and len(result) > 1 else []
 
-	# Remove "Total" and "Closing (Opening + Total)" summary rows that the
-	# standard GL inserts between voucher groups — they clutter the running-
-	# balance view and are misleading when group_by is blank (one row per entry).
-	data = _strip_subtotals(data)
+	data = _rebuild_running_balance(data)
 
 	_add_party_names(data)
 	columns = _arrange_columns(columns)
@@ -45,27 +44,88 @@ def execute(filters=None):
 	return tuple([columns, data] + rest)
 
 
-def _strip_subtotals(data):
-	"""Remove the per-voucher Total / Closing rows injected by the standard GL.
+def _summary_label(row):
+	"""The standard GL marks Opening/Total/Closing rows by an account label
+	wrapped in literal quotes (e.g. \"'Opening'\"). Return the bare label, or
+	None for a normal ledger row."""
+	account = (row.get("account") or "").strip().strip("'\"")
+	if account in ("Opening", "Total", "Closing (Opening + Total)") and not row.get(
+		"voucher_no"
+	):
+		return account
+	return None
 
-	The standard report adds a 'Total' row and a 'Closing (Opening + Total)'
-	row after each voucher group. These are identified by their account label
-	text and by having no posting_date. We keep Opening and Closing Balance
-	rows at the report edges but drop the per-transaction subtotals.
+
+def _rebuild_running_balance(data):
+	"""Flatten the standard GL output to: one Opening row, every ledger entry
+	with a TRUE cumulative running balance, then one Total and one Closing row.
+
+	The standard report (even ungrouped) can emit repeated Opening/Total/
+	Closing blocks and blank separator rows; per-block balances reset, which
+	defeats the purpose of this report.
 	"""
-	keep = []
+	opening_row = None
+	entries = []
+
 	for row in data or []:
 		if not isinstance(row, dict):
-			keep.append(row)
 			continue
-		account = (row.get("account") or "").strip()
-		# The standard GL marks these rows by setting account to these labels
-		if account in ("Total", "Closing (Opening + Total)") and not row.get(
-			"posting_date"
-		):
+		label = _summary_label(row)
+		if label == "Opening":
+			if opening_row is None:
+				opening_row = row
 			continue
-		keep.append(row)
-	return keep
+		if label in ("Total", "Closing (Opening + Total)"):
+			continue
+		if not row.get("voucher_no"):
+			# blank separator rows
+			continue
+		entries.append(row)
+
+	out = []
+	opening_balance = 0.0
+	if opening_row is not None:
+		opening_row["account"] = _("Opening")
+		opening_balance = flt(opening_row.get("balance")) or (
+			flt(opening_row.get("debit")) - flt(opening_row.get("credit"))
+		)
+		opening_row["balance"] = opening_balance
+		out.append(opening_row)
+
+	running = opening_balance
+	total_debit = 0.0
+	total_credit = 0.0
+	for row in entries:
+		debit = flt(row.get("debit"))
+		credit = flt(row.get("credit"))
+		running += debit - credit
+		total_debit += debit
+		total_credit += credit
+		row["balance"] = running
+		out.append(row)
+
+	if entries or opening_row is not None:
+		currency = (entries[0] if entries else opening_row).get("account_currency")
+		out.append(
+			{
+				"account": _("Total"),
+				"debit": total_debit,
+				"credit": total_credit,
+				"balance": total_debit - total_credit,
+				"account_currency": currency,
+			}
+		)
+		out.append(
+			{
+				"account": _("Closing (Opening + Total)"),
+				"debit": opening_balance + total_debit,
+				"credit": total_credit,
+				"balance": running,
+				"account_currency": currency,
+			}
+		)
+
+	return out
 
 
 def _add_party_names(data):

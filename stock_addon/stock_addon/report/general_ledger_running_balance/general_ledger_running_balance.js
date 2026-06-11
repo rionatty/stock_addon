@@ -72,23 +72,6 @@ frappe.query_reports["General Ledger Running Balance"] = {
 			},
 		},
 		{
-			fieldname: "group_by",
-			label: __("Group by"),
-			fieldtype: "Select",
-			options: [
-				"",
-				{ value: "Group by Voucher", label: __("Group by Voucher") },
-				{
-					value: "Group by Voucher (Consolidated)",
-					label: __("Group by Voucher (Consolidated)"),
-				},
-				{ value: "Group by Account", label: __("Group by Account") },
-				{ value: "Group by Party", label: __("Group by Party") },
-			],
-			// blank = one row per GL entry, so the running balance is per entry
-			default: "",
-		},
-		{
 			fieldname: "finance_book",
 			label: __("Finance Book"),
 			fieldtype: "Link",
