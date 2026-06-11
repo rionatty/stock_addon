@@ -31,7 +31,7 @@ STOCK_REPORTS = [
 	("Van Stock Movement", "Van Stock Movement"),
 	("Stock Balance Report", "Stock Balance Report"),
 	("Stock Ledger Report", "Stock Ledger Report"),
-	("Stock Report", "Stock Report"),
+	("Summarized Stock Report", "Summarized Stock Report"),
 	("Stock Transfer and Manufacture Analysis", "Stock Transfer & Manufacture Analysis"),
 ]
 
@@ -189,6 +189,30 @@ def _ensure_card_with_reports(workspace_name, card_label, reports):
 def add_stock_addon_reports_to_stock_workspace():
 	"""Register inventory / stock reports under the Stock workspace."""
 	_ensure_card_with_reports(STOCK_WORKSPACE, STOCK_REPORTS_CARD, STOCK_REPORTS)
+
+
+def add_summarized_stock_report_shortcut():
+	"""Idempotently add a 'Summarized Stock Report' shortcut tile to the
+	Stock workspace so it sits at the top with the other quick links."""
+	report = "Summarized Stock Report"
+	if not frappe.db.exists("Workspace", STOCK_WORKSPACE):
+		return
+	if not frappe.db.exists("Report", report):
+		return
+
+	ws = frappe.get_doc("Workspace", STOCK_WORKSPACE)
+	if any(s.link_to == report for s in ws.shortcuts):
+		return
+
+	ws.append("shortcuts", {
+		"type": "Report",
+		"label": report,
+		"link_to": report,
+		"doc_view": "",
+	})
+	ws.flags.ignore_permissions = True
+	ws.save()
+	frappe.db.commit()
 
 
 def add_route_and_sales_reports_to_accounts_workspace():

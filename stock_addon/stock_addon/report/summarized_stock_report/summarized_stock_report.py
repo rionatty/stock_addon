@@ -1,7 +1,7 @@
 # Copyright (c) 2025, mohtashim and contributors
 # For license information, please see license.txt
 
-"""Stock Report — Opening, In, Out, Closing.
+"""Summarized Stock Report — Opening, In, Out, Closing.
 
 Shows one row per item + warehouse with:
   Opening qty  = sum of all SLE actual_qty strictly before From Date
@@ -238,4 +238,4 @@ def _company_cond(filters):
 @frappe.whitelist()
 def get_pdf_html(filters, data, columns=None):
 	from stock_addon.stock_addon.report.report_print_utils import render_report_pdf
-	return render_report_pdf("Stock Report", filters, columns or get_columns(), data)
+	return render_report_pdf("Summarized Stock Report", filters, columns or get_columns(), data)

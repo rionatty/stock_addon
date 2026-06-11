@@ -1,7 +1,7 @@
 // Copyright (c) 2025, mohtashim and contributors
 // For license information, please see license.txt
 
-frappe.query_reports["Stock Report"] = {
+frappe.query_reports["Summarized Stock Report"] = {
 	filters: [
 		{
 			fieldname: "company",
@@ -55,7 +55,7 @@ frappe.query_reports["Stock Report"] = {
 				return;
 			}
 			frappe.call({
-				method: "stock_addon.stock_addon.report.stock_report.stock_report.get_pdf_html",
+				method: "stock_addon.stock_addon.report.summarized_stock_report.summarized_stock_report.get_pdf_html",
 				args: {
 					filters: JSON.stringify(report.get_values()),
 					data: JSON.stringify(data),

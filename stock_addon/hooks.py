@@ -114,6 +114,7 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_inventory_counting_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_stock_addon_reports_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
+    "stock_addon.stock_addon.workspace_setup.add_summarized_stock_report_shortcut",
     # Standard GL: turn off add_total_row (the client-side footer doubled
     # Debit/Credit and summed the Running Balance into a meaningless number).
     "stock_addon.stock_addon.report_patches.disable_gl_footer_total",

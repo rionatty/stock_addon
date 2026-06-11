@@ -11,14 +11,14 @@
  "is_standard": "Yes",
  "letter_head": "SAH",
  "letterhead": null,
- "modified": "2025-07-03 19:02:46.051557",
+ "modified": "2026-06-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Stock Addon",
- "name": "Stock Report",
+ "name": "Summarized Stock Report",
  "owner": "Administrator",
  "prepared_report": 0,
  "ref_doctype": "Stock Ledger Entry",
- "report_name": "Stock Report",
+ "report_name": "Summarized Stock Report",
  "report_type": "Script Report",
  "roles": [
   {
