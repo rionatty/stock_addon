@@ -36,6 +36,7 @@ STOCK_REPORTS = [
 ]
 
 FINANCE_REPORTS = [
+	("Daily Summary Report", "Daily Summary Report"),
 	("Route Ageing Report", "Route Ageing Report"),
 	("Route Cash Collection and Banking", "Route Cash Collection & Banking"),
 	("Route Status Report Daily", "Route Status Report (Daily)"),
