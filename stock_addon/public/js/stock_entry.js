@@ -944,3 +944,83 @@ frappe.ui.form.on('Stock Entry Detail', {
         }
     }
 });
+// ─── Sales Price auto-population + totals (stock_addon) ─────────────────────
+// custom_sales_price        : unit selling price per STOCK UoM (auto-fetched
+//                             from the default selling Item Price; editable).
+// custom_total_amount_...   : sales price × stock qty for the row (read-only).
+// Header custom_total_qty / custom_total_sales_amount: document roll-ups.
+// The server hook (doc_events/stock_entry.py) recomputes the same numbers on
+// save, so these are a live preview with an authoritative server pass.
+
+function sa_row_stock_qty(row) {
+    var transfer = flt(row.transfer_qty);
+    if (transfer) return transfer;
+    return flt(row.qty) * (flt(row.conversion_factor) || 1);
+}
+
+function sa_update_row_total(frm, cdt, cdn) {
+    var row = locals[cdt][cdn];
+    if (!row) return;
+    var total = flt(row.custom_sales_price) * sa_row_stock_qty(row);
+    if (flt(row.custom_total_amount_sales_price) !== total) {
+        frappe.model.set_value(cdt, cdn, 'custom_total_amount_sales_price', total);
+    }
+    sa_update_doc_totals(frm);
+}
+
+function sa_update_doc_totals(frm) {
+    var total_qty = 0;
+    var total_sales = 0;
+    (frm.doc.items || []).forEach(function (r) {
+        total_qty += flt(r.qty);
+        total_sales += flt(r.custom_total_amount_sales_price);
+    });
+    frm.set_value('custom_total_qty', total_qty);
+    frm.set_value('custom_total_sales_amount', total_sales);
+}
+
+function sa_fetch_sales_price(frm, cdt, cdn) {
+    var row = locals[cdt][cdn];
+    if (!row || !row.item_code) return;
+    // Don't clobber a price the user (or the MR copy) already set.
+    if (flt(row.custom_sales_price)) {
+        sa_update_row_total(frm, cdt, cdn);
+        return;
+    }
+    frappe.call({
+        method: 'stock_addon.stock_addon.doctype.inventory_counting.inventory_counting.get_selling_rate',
+        args: { item_code: row.item_code },
+        callback: function (r) {
+            var rate = flt(r.message);
+            if (rate && locals[cdt] && locals[cdt][cdn]) {
+                frappe.model.set_value(cdt, cdn, 'custom_sales_price', rate);
+            }
+            sa_update_row_total(frm, cdt, cdn);
+        }
+    });
+}
+
+frappe.ui.form.on('Stock Entry Detail', {
+    item_code: function (frm, cdt, cdn) {
+        // small delay so ERPNext's own item fetch (uom/conversion) lands first
+        setTimeout(function () { sa_fetch_sales_price(frm, cdt, cdn); }, 400);
+    },
+    qty: function (frm, cdt, cdn) {
+        sa_update_row_total(frm, cdt, cdn);
+    },
+    uom: function (frm, cdt, cdn) {
+        setTimeout(function () { sa_update_row_total(frm, cdt, cdn); }, 300);
+    },
+    conversion_factor: function (frm, cdt, cdn) {
+        sa_update_row_total(frm, cdt, cdn);
+    },
+    transfer_qty: function (frm, cdt, cdn) {
+        sa_update_row_total(frm, cdt, cdn);
+    },
+    custom_sales_price: function (frm, cdt, cdn) {
+        sa_update_row_total(frm, cdt, cdn);
+    },
+    items_remove: function (frm) {
+        sa_update_doc_totals(frm);
+    }
+});

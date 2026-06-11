@@ -140,6 +140,9 @@ fixtures = [
                 "in",
                 [
                     "Stock Entry Detail-custom_sales_price",
+                    "Stock Entry Detail-custom_total_amount_sales_price",
+                    "Stock Entry-custom_total_qty",
+                    "Stock Entry-custom_total_sales_amount",
                     "Material Request-custom_user",
                     "Stock Entry-custom_user",
                 ],
@@ -150,11 +153,13 @@ fixtures = [
 
 # Doc Events — wired hooks
 # ------------------------
-# Stock Entry: fetch the sales price from the source Material Request line(s)
-# into Stock Entry Detail.custom_sales_price.
+# Stock Entry: populate Stock Entry Detail.custom_sales_price (from the source
+# Material Request line or the default selling Item Price), compute each row's
+# Total Amount (Sales Price), and roll up the header Total Qty / Document
+# Total (Sales Price). Wired to `validate` so it runs on save AND submit.
 doc_events = {
     "Stock Entry": {
-        "before_save": "stock_addon.stock_addon.doc_events.stock_entry.copy_sales_price_from_material_request",
+        "validate": "stock_addon.stock_addon.doc_events.stock_entry.set_sales_prices_and_totals",
     },
 }
 
