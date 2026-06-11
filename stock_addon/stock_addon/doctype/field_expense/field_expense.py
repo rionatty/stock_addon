@@ -29,6 +29,7 @@ class FieldExpense(Document):
 			self.expense_date = nowdate()
 
 		self.set_paid_from_account()
+		self.set_line_expense_accounts()
 		self.default_line_cost_centers()
 		self.calculate_total()
 		self.set_status()
@@ -40,6 +41,18 @@ class FieldExpense(Document):
 		cash_account = frappe.db.get_value("Sales Person", self.sales_person, "custom_cash_account")
 		if cash_account:
 			self.paid_from_account = cash_account
+
+	def set_line_expense_accounts(self):
+		"""Auto-fill each line's expense account from its Expense Mapping.
+
+		Covers lines created from the mobile app (no client script runs there).
+		An account the back office set by hand is left alone.
+		"""
+		for row in self.expense_items:
+			if row.expense_type and not row.expense_account:
+				row.expense_account = frappe.db.get_value(
+					"Expense Mapping", row.expense_type, "expense_account"
+				)
 
 	def default_line_cost_centers(self):
 		"""Every expense line inherits the document cost center (from the app)."""

@@ -6,6 +6,7 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "expense_type",
   "description",
   "amount",
   "expense_account",
@@ -13,7 +14,16 @@
  ],
  "fields": [
   {
-   "columns": 4,
+   "columns": 2,
+   "description": "Pick the expense; the account auto-populates from the mapping.",
+   "fieldname": "expense_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Expense",
+   "options": "Expense Mapping"
+  },
+  {
+   "columns": 3,
    "fieldname": "description",
    "fieldtype": "Small Text",
    "in_list_view": 1,
@@ -30,7 +40,7 @@
   },
   {
    "columns": 3,
-   "description": "Mapped by the back office before posting.",
+   "description": "Auto-filled from the Expense mapping; the back office can still override.",
    "fieldname": "expense_account",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -50,7 +60,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-06-04 12:00:00.000000",
+ "modified": "2026-06-11 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Stock Addon",
  "name": "Field Expense Item",

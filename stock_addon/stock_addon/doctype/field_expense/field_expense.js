@@ -3,6 +3,10 @@
 
 frappe.ui.form.on("Field Expense", {
 	onload(frm) {
+		// only offer active expense mappings on the lines
+		frm.set_query("expense_type", "expense_items", () => {
+			return { filters: { disabled: 0 } };
+		});
 		// only let the back office pick expense (P&L) accounts for the lines
 		frm.set_query("expense_account", "expense_items", () => {
 			return {
@@ -87,5 +91,30 @@ frappe.ui.form.on("Field Expense", {
 				frappe.model.set_value(row.doctype, row.name, "cost_center", frm.doc.cost_center);
 			}
 		});
+	},
+});
+
+frappe.ui.form.on("Field Expense Item", {
+	expense_type(frm, cdt, cdn) {
+		// pull the mapped account; clearing the expense clears the account too
+		const row = locals[cdt][cdn];
+		if (!row.expense_type) {
+			frappe.model.set_value(cdt, cdn, "expense_account", null);
+			return;
+		}
+		frappe.db.get_value(
+			"Expense Mapping",
+			row.expense_type,
+			"expense_account",
+			(r) => {
+				if (r && r.expense_account) {
+					frappe.model.set_value(cdt, cdn, "expense_account", r.expense_account);
+				}
+			}
+		);
+		// default the narration to the expense name so reps type less
+		if (!row.description) {
+			frappe.model.set_value(cdt, cdn, "description", row.expense_type);
+		}
 	},
 });
