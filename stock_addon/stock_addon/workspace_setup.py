@@ -47,7 +47,15 @@ FINANCE_REPORTS = [
 
 STOCK_REPORTS_CARD = "Stock Addon Reports"
 FINANCE_REPORTS_CARD = "Route & Sales Reports"
-ACCOUNTS_WORKSPACE = "Accounts"
+# accounting workspace name varies by ERPNext version — first match wins
+ACCOUNTS_WORKSPACE_CANDIDATES = ["Accounts", "Accounting", "Invoicing", "Receivables"]
+
+
+def _accounts_workspace():
+	for name in ACCOUNTS_WORKSPACE_CANDIDATES:
+		if frappe.db.exists("Workspace", name):
+			return name
+	return None
 
 
 def add_inventory_counting_to_stock_workspace():
@@ -217,7 +225,8 @@ def add_summarized_stock_report_shortcut():
 
 
 def add_route_and_sales_reports_to_accounts_workspace():
-	"""Register money / route / GL reports under the Accounts workspace."""
-	_ensure_card_with_reports(
-		ACCOUNTS_WORKSPACE, FINANCE_REPORTS_CARD, FINANCE_REPORTS
-	)
+	"""Register money / route / GL reports under the accounting workspace
+	(named Accounts / Accounting / Invoicing depending on ERPNext version)."""
+	workspace = _accounts_workspace()
+	if workspace:
+		_ensure_card_with_reports(workspace, FINANCE_REPORTS_CARD, FINANCE_REPORTS)
