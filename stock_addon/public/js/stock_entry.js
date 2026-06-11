@@ -1024,3 +1024,33 @@ frappe.ui.form.on('Stock Entry Detail', {
         sa_update_doc_totals(frm);
     }
 });
+
+// Recompute every row total + the document totals in one pass. Values are
+// written straight onto the docs (no set_value) so opening an old draft does
+// not mark the form dirty — the server hook persists them on the next save.
+function sa_recalc_all(frm) {
+    var total_qty = 0;
+    var total_sales = 0;
+    (frm.doc.items || []).forEach(function (row) {
+        row.custom_total_amount_sales_price =
+            flt(row.custom_sales_price) * sa_row_stock_qty(row);
+        total_qty += flt(row.qty);
+        total_sales += flt(row.custom_total_amount_sales_price);
+    });
+    frm.doc.custom_total_qty = total_qty;
+    frm.doc.custom_total_sales_amount = total_sales;
+    frm.refresh_field('items');
+    frm.refresh_field('custom_total_qty');
+    frm.refresh_field('custom_total_sales_amount');
+}
+
+frappe.ui.form.on('Stock Entry', {
+    refresh: function (frm) {
+        // Drafts saved before the server hook was wired show stale 0.00
+        // totals — fix the display as soon as the form opens.
+        if (frm.doc.docstatus === 0) sa_recalc_all(frm);
+    },
+    validate: function (frm) {
+        sa_recalc_all(frm);
+    }
+});

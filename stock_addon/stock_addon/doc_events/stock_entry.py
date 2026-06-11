@@ -5,13 +5,13 @@
 
 On every save/submit (wired to ``validate`` in hooks.py) we:
 
-1. Populate ``custom_sales_price`` (unit selling price per STOCK UoM) on each
-   item row that doesn't have one yet:
-     a. from the source Material Request line when the row was pulled in via
-        "Get Items From" (MR stores the line TOTAL, so unit = total / stock
-        qty), else
-     b. from the default selling Item Price (same per-stock-UoM logic the
-        Inventory Counting doctype uses).
+1. Populate ``custom_sales_price`` (unit selling price per STOCK UoM):
+     a. rows pulled in via "Get Items From" a Material Request arrive with the
+        MR line TOTAL auto-copied into this field by Frappe's doc mapper —
+        normalise it to the unit price (total / MR stock qty);
+     b. otherwise fill an empty price from the MR line or the default selling
+        Item Price (same per-stock-UoM logic the Inventory Counting doctype
+        uses). A user-edited price is never clobbered.
 2. Compute ``custom_total_amount_sales_price`` per row
    (= sales price x stock qty).
 3. Roll the document totals up into the header:
@@ -23,6 +23,7 @@ this server hook is the authoritative recalculation on save.
 """
 
 import frappe
+from frappe import _
 from frappe.utils import flt
 
 
@@ -34,13 +35,15 @@ def _row_stock_qty(row):
 	return flt(row.get("qty")) * (flt(row.get("conversion_factor")) or 1.0)
 
 
-def _unit_price_from_mr(row):
-	"""Unit selling price (per stock UoM) derived from the source Material
-	Request line. MR Item.custom_sales_price holds the line TOTAL (that's what
-	the mobile app sends), so divide by the MR row's stock qty."""
+def _mr_price_info(row):
+	"""(unit_price, line_total) from the source Material Request line.
+
+	MR Item.custom_sales_price holds the line TOTAL (that's what the mobile
+	app sends), so unit = total / MR stock qty. Returns (None, None) when the
+	row has no MR source or the MR line carries no price."""
 	mr_item = row.get("material_request_item")
 	if not mr_item:
-		return None
+		return None, None
 	try:
 		mr = frappe.db.get_value(
 			"Material Request Item",
@@ -49,16 +52,17 @@ def _unit_price_from_mr(row):
 			as_dict=True,
 		)
 	except Exception:
-		return None
+		return None, None
 	if not mr or not mr.get("custom_sales_price"):
-		return None
+		return None, None
 
+	line_total = flt(mr.custom_sales_price)
 	stock_qty = flt(mr.get("stock_qty")) or (
 		flt(mr.get("qty")) * (flt(mr.get("conversion_factor")) or 1.0)
 	)
 	if stock_qty <= 0:
-		return None
-	return flt(mr.custom_sales_price) / stock_qty
+		return None, None
+	return line_total / stock_qty, line_total
 
 
 def _unit_price_from_price_list(item_code, cache):
@@ -87,16 +91,33 @@ def set_sales_prices_and_totals(doc, method=None):
 		if not row.get("item_code"):
 			continue
 
-		# 1. Unit selling price (don't clobber a user-set value).
-		if not flt(row.get("custom_sales_price")):
-			price = _unit_price_from_mr(row)
-			if not price:
-				price = _unit_price_from_price_list(row.item_code, rate_cache)
-			row.custom_sales_price = flt(price)
+		# 1. Unit selling price. Frappe's doc mapper auto-copies the MR line's
+		#    custom_sales_price (a line TOTAL) into this field on Get Items
+		#    From, so a value equal to the raw MR total is normalised to the
+		#    unit price; an empty value is filled from the MR or the default
+		#    selling Item Price. A genuinely user-edited price is left alone.
+		current = flt(row.get("custom_sales_price"))
+		mr_unit, mr_total = _mr_price_info(row)
+		if mr_unit is not None and (not current or abs(current - mr_total) < 0.005):
+			row.custom_sales_price = flt(mr_unit)
+		elif not current:
+			row.custom_sales_price = flt(
+				_unit_price_from_price_list(row.item_code, rate_cache)
+			)
 
 		# 2. Row total = unit price (per stock UoM) x stock qty.
 		stock_qty = _row_stock_qty(row)
 		row.custom_total_amount_sales_price = flt(row.custom_sales_price) * stock_qty
+
+		# A row with a sales price must never be saved with an empty total.
+		if flt(row.custom_sales_price) and stock_qty and not flt(
+			row.custom_total_amount_sales_price
+		):
+			frappe.throw(
+				_("Row #{0} ({1}): Total Amount (Sales Price) could not be calculated even though a Sales Price exists. The document was not saved.").format(
+					row.idx, row.item_code
+				)
+			)
 
 		# 3. Accumulate document totals.
 		total_qty += flt(row.get("qty"))

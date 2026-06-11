@@ -151,18 +151,6 @@ fixtures = [
     },
 ]
 
-# Doc Events — wired hooks
-# ------------------------
-# Stock Entry: populate Stock Entry Detail.custom_sales_price (from the source
-# Material Request line or the default selling Item Price), compute each row's
-# Total Amount (Sales Price), and roll up the header Total Qty / Document
-# Total (Sales Price). Wired to `validate` so it runs on save AND submit.
-doc_events = {
-    "Stock Entry": {
-        "validate": "stock_addon.stock_addon.doc_events.stock_entry.set_sales_prices_and_totals",
-    },
-}
-
 # Desk Notifications
 # ------------------
 # See frappe.core.notifications.get_notification_config
@@ -194,6 +182,8 @@ override_doctype_class = {
 # Document Events
 # ---------------
 # Hook on document methods and events
+# NOTE: doc_events must be assigned exactly ONCE in this module — a second
+# assignment silently replaces the first and Frappe only sees the last one.
 
 doc_events = {
     "Purchase Receipt": {
@@ -216,7 +206,10 @@ doc_events = {
         ],
         "validate": [
             "stock_addon.stock_addon.doctype.stock_entry.stock_entry.set_cost_center_to_child_items",
-            "stock_addon.stock_addon.doctype.stock_entry.stock_entry.get_expense_account"
+            "stock_addon.stock_addon.doctype.stock_entry.stock_entry.get_expense_account",
+            # Sales price autofill + row/document totals — validate runs on
+            # both save and submit, so totals can never persist empty.
+            "stock_addon.stock_addon.doc_events.stock_entry.set_sales_prices_and_totals"
         ]
     },
     "Stock Reconciliation": {
