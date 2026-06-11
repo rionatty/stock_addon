@@ -199,3 +199,31 @@ def wrap_general_ledger_execute(original_execute):
 	patched_execute._stock_addon_patched = True
 	patched_execute._stock_addon_original = original_execute
 	return patched_execute
+
+
+# ─── Print PDF for the standard General Ledger ──────────────────────────────
+@frappe.whitelist()
+def general_ledger_get_pdf_html(filters, data, columns=None):
+	"""Render the standard GL report through the addon's uniform print layout.
+	Called by public/js/general_ledger_report.js (the desk-wide script that
+	adds the Print PDF button to the standard report's toolbar)."""
+	from stock_addon.stock_addon.report.report_print_utils import render_report_pdf
+
+	return render_report_pdf("General Ledger", filters, columns or [], data)
+
+
+# ─── after_migrate: kill the bogus client-side footer Total ─────────────────
+def disable_gl_footer_total():
+	"""The GL Report record ships with ``add_total_row = 1``, which makes the
+	desk sum EVERY column over ALL rows client-side — doubling Debit/Credit
+	(entries + the Closing row) and summing the Running Balance column into a
+	meaningless number. The correct figures already live in the report's own
+	"Closing (Opening + Total)" row, so keep the footer off. Re-applied on
+	every migrate in case an ERPNext update re-syncs the Report record."""
+	try:
+		frappe.db.set_value("Report", "General Ledger", "add_total_row", 0)
+	except Exception:
+		frappe.log_error(
+			title="stock_addon: could not disable GL add_total_row",
+			message=frappe.get_traceback(),
+		)

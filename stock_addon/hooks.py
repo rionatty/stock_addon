@@ -11,7 +11,10 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/stock_addon/css/stock_addon.css"
-# app_include_js = "/assets/stock_addon/js/stock_addon.js"
+# Desk-wide script: adds the uniform "Print PDF" button to the STANDARD
+# General Ledger query report (ERPNext owns that report's js, so we watch
+# the route instead). Plain asset path — no bench build needed.
+app_include_js = "/assets/stock_addon/js/general_ledger_report.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/stock_addon/css/stock_addon.css"
@@ -111,6 +114,9 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_inventory_counting_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_stock_addon_reports_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
+    # Standard GL: turn off add_total_row (the client-side footer doubled
+    # Debit/Credit and summed the Running Balance into a meaningless number).
+    "stock_addon.stock_addon.report_patches.disable_gl_footer_total",
 ]
 
 # Standard GL report is patched server-side via a module-level monkey patch
