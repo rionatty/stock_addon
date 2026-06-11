@@ -128,6 +128,30 @@ def add_inventory_counting_to_stock_workspace():
 
 
 # ─── Generic helpers ────────────────────────────────────────────────────────
+def _ensure_content_block(ws, block_type, name_key, name_value, extra=None):
+	"""Make sure the workspace ``content`` JSON has a block referencing the
+	given card/shortcut. In v15/v16 the desk renders strictly from content
+	blocks — a card that only exists in the links table never shows up."""
+	import json
+
+	try:
+		content = json.loads(ws.content or "[]")
+	except Exception:
+		content = []
+
+	for block in content:
+		if block.get("type") == block_type and (block.get("data") or {}).get(name_key) == name_value:
+			return False
+
+	block_id = frappe.scrub(name_value)[:20] or block_type
+	data = {name_key: name_value, "col": 4}
+	if extra:
+		data.update(extra)
+	content.append({"id": f"{block_type}_{block_id}", "type": block_type, "data": data})
+	ws.content = json.dumps(content)
+	return True
+
+
 def _ensure_card_with_reports(workspace_name, card_label, reports):
 	"""Idempotently add a Card Break with the given label to the workspace,
 	then append a Report link for each (name, label) in ``reports`` that
@@ -183,6 +207,10 @@ def _ensure_card_with_reports(workspace_name, card_label, reports):
 		})
 		changed = True
 
+	# v16 renders from content blocks — register the card there too
+	if _ensure_content_block(ws, "card", "card_name", card_label):
+		changed = True
+
 	if not changed:
 		return
 
@@ -210,15 +238,24 @@ def add_summarized_stock_report_shortcut():
 		return
 
 	ws = frappe.get_doc("Workspace", STOCK_WORKSPACE)
-	if any(s.link_to == report for s in ws.shortcuts):
+	changed = False
+
+	if not any(s.link_to == report for s in ws.shortcuts):
+		ws.append("shortcuts", {
+			"type": "Report",
+			"label": report,
+			"link_to": report,
+			"doc_view": "",
+		})
+		changed = True
+
+	# v16 renders from content blocks — the tile needs a shortcut block too
+	if _ensure_content_block(ws, "shortcut", "shortcut_name", report, extra={"col": 3}):
+		changed = True
+
+	if not changed:
 		return
 
-	ws.append("shortcuts", {
-		"type": "Report",
-		"label": report,
-		"link_to": report,
-		"doc_view": "",
-	})
 	ws.flags.ignore_permissions = True
 	ws.save()
 	frappe.db.commit()
