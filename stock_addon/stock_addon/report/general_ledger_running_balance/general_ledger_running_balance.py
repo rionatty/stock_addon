@@ -58,7 +58,7 @@ def _summary_label(row):
 
 def _rebuild_running_balance(data):
 	"""Flatten the standard GL output to: one Opening row, every ledger entry
-	with a TRUE cumulative running balance, then one Total and one Closing row.
+	with a TRUE cumulative running balance, then one Closing row.
 
 	The standard report (even ungrouped) can emit repeated Opening/Total/
 	Closing blocks and blank separator rows; per-block balances reset, which
@@ -105,16 +105,9 @@ def _rebuild_running_balance(data):
 		out.append(row)
 
 	if entries or opening_row is not None:
+		# No "Total" row on purpose: summing a running-balance column is
+		# meaningless — only the Closing row carries the real position.
 		currency = (entries[0] if entries else opening_row).get("account_currency")
-		out.append(
-			{
-				"account": _("Total"),
-				"debit": total_debit,
-				"credit": total_credit,
-				"balance": total_debit - total_credit,
-				"account_currency": currency,
-			}
-		)
 		out.append(
 			{
 				"account": _("Closing (Opening + Total)"),
