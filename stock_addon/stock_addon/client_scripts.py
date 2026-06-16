@@ -59,11 +59,8 @@ def install_journey_plan_form_script():
     )
 
 
-def install_customer_list_script():
-    """Push public/js/customer_list.js into the database as a List Client Script."""
-    _upsert(
-        name     = "customer-list-stock-addon",
-        dt       = "Customer",
-        view     = "List",
-        filename = "customer_list.js",
-    )
+def remove_customer_list_script():
+    """Delete the Customer list Client Script record if it still exists in the DB."""
+    if frappe.db.exists("Client Script", "customer-list-stock-addon"):
+        frappe.delete_doc("Client Script", "customer-list-stock-addon", ignore_permissions=True)
+        frappe.db.commit()

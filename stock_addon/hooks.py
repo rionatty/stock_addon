@@ -120,7 +120,7 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_journey_plan_to_accounts_workspace",
     # Client Scripts — push JS files into the DB so they load without bench build
     "stock_addon.stock_addon.client_scripts.install_journey_plan_form_script",
-    "stock_addon.stock_addon.client_scripts.install_customer_list_script",
+    "stock_addon.stock_addon.client_scripts.remove_customer_list_script",
     # Standard GL: turn off add_total_row (the client-side footer doubled
     # Debit/Credit and summed the Running Balance into a meaningless number).
     "stock_addon.stock_addon.report_patches.disable_gl_footer_total",
