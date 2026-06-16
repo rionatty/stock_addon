@@ -77,6 +77,31 @@ class JourneyPlan(Document):
 
 
 @frappe.whitelist()
+def get_customers_for_sales_person(sales_person):
+	"""Return all customers that have *sales_person* in their Sales Team.
+
+	Used by the 'Get Customers' button on the Journey Plan form to bulk-populate
+	the customers child table with the rep's full customer list.
+	"""
+	return frappe.db.sql(
+		"""
+		SELECT DISTINCT
+		    c.name          AS customer,
+		    c.customer_name AS customer_name
+		FROM
+		    `tabCustomer` c
+		    JOIN `tabSales Team` st ON st.parent     = c.name
+		                           AND st.parenttype = 'Customer'
+		WHERE
+		    st.sales_person = %(sp)s
+		ORDER BY c.customer_name
+		""",
+		{"sp": sales_person},
+		as_dict=True,
+	)
+
+
+@frappe.whitelist()
 def get_todays_journey(sales_person):
 	"""Return the customer visit list for *sales_person* on today's date.
 

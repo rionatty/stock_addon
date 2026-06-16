@@ -36,7 +36,8 @@ doctype_js = {
     "Purchase Receipt" : "public/js/purchase_receipt.js ",
     "Stock Entry" : "public/js/stock_entry.js",
     "Landed Cost Voucher" : "public/js/landed_cost_voucher.js",
-    "Delivery Note" : "public/js/delivery_note.js"
+    "Delivery Note" : "public/js/delivery_note.js",
+    "Journey Plan" : "public/js/journey_plan.js",
     }
 doctype_list_js = {
     "Material Request" : "public/js/material_request_list.js",
