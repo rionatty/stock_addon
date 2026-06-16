@@ -37,14 +37,14 @@ doctype_js = {
     "Stock Entry" : "public/js/stock_entry.js",
     "Landed Cost Voucher" : "public/js/landed_cost_voucher.js",
     "Delivery Note" : "public/js/delivery_note.js",
-    "Journey Plan" : "public/js/journey_plan.js",
+    # Journey Plan JS is installed as a Client Script via after_migrate (no bench build needed)
     }
 doctype_list_js = {
     "Material Request" : "public/js/material_request_list.js",
     "Purchase Receipt" : "public/js/purchase_receipt_list.js",
     "Purchase Order" : "public/js/purchase_order_list.js",
     "Bin" : "public/js/bin_list.js",
-    "Customer" : "public/js/customer_list.js",
+    # Customer list JS is installed as a Client Script via after_migrate (no bench build needed)
     }
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -118,6 +118,9 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
     "stock_addon.stock_addon.workspace_setup.add_summarized_stock_report_shortcut",
     "stock_addon.stock_addon.workspace_setup.add_journey_plan_to_accounts_workspace",
+    # Client Scripts — push JS files into the DB so they load without bench build
+    "stock_addon.stock_addon.client_scripts.install_journey_plan_form_script",
+    "stock_addon.stock_addon.client_scripts.install_customer_list_script",
     # Standard GL: turn off add_total_row (the client-side footer doubled
     # Debit/Credit and summed the Running Balance into a meaningless number).
     "stock_addon.stock_addon.report_patches.disable_gl_footer_total",
