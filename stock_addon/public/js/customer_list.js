@@ -27,6 +27,7 @@ frappe.listview_settings['Customer'] = {
 		frappe.call({
 			method: 'stock_addon.stock_addon.doc_events.customer_balance.get_customer_balances',
 			args: { customers: JSON.stringify(names) },
+			freeze: false,
 			callback(r) {
 				const balances = r.message || {};
 				names.forEach(name => {
