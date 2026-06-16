@@ -155,6 +155,8 @@ fixtures = [
                     "Stock Entry-custom_total_sales_amount",
                     "Material Request-custom_user",
                     "Stock Entry-custom_user",
+                    "Customer-custom_primary_sales_person",
+                    "Customer-custom_outstanding_balance",
                     "Customer-custom_visit_day",
                     "Customer-custom_journey_plan",
                 ],
@@ -240,6 +242,17 @@ doc_events = {
     },
     "Landed Cost Voucher": {
         "on_submit": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
+    },
+    "Customer": {
+        "on_update": "stock_addon.stock_addon.doc_events.customer_balance.sync_primary_sales_person",
+    },
+    "Sales Invoice": {
+        "on_submit": "stock_addon.stock_addon.doc_events.customer_balance.refresh_balance_on_invoice",
+        "on_cancel": "stock_addon.stock_addon.doc_events.customer_balance.refresh_balance_on_invoice",
+    },
+    "Payment Entry": {
+        "on_submit": "stock_addon.stock_addon.doc_events.customer_balance.refresh_balance_on_payment",
+        "on_cancel": "stock_addon.stock_addon.doc_events.customer_balance.refresh_balance_on_payment",
     },
 }
 
