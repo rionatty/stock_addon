@@ -84,5 +84,33 @@
   "no_copy": 1,
   "description": "Sum of Total Amount (Sales Price) across all item rows (computed).",
   "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-custom_visit_day",
+  "dt": "Customer",
+  "fieldname": "custom_visit_day",
+  "label": "Visit Day",
+  "fieldtype": "Data",
+  "insert_after": "customer_name",
+  "read_only": 1,
+  "in_list_view": 0,
+  "in_standard_filter": 1,
+  "description": "Weekday (Monday–Saturday) denormalized from the active Journey Plan on submit. Used by the mobile app to resolve today's route.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-custom_journey_plan",
+  "dt": "Customer",
+  "fieldname": "custom_journey_plan",
+  "label": "Journey Plan",
+  "fieldtype": "Link",
+  "options": "Journey Plan",
+  "insert_after": "custom_visit_day",
+  "read_only": 1,
+  "in_list_view": 0,
+  "description": "Active Journey Plan covering this customer. Auto-set on Journey Plan submit/cancel.",
+  "module": "Stock Addon"
  }
 ]

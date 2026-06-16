@@ -115,6 +115,7 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_stock_addon_reports_to_stock_workspace",
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
     "stock_addon.stock_addon.workspace_setup.add_summarized_stock_report_shortcut",
+    "stock_addon.stock_addon.workspace_setup.add_journey_plan_to_accounts_workspace",
     # Standard GL: turn off add_total_row (the client-side footer doubled
     # Debit/Credit and summed the Running Balance into a meaningless number).
     "stock_addon.stock_addon.report_patches.disable_gl_footer_total",
@@ -138,6 +139,7 @@ after_migrate = [
 # Custom Fields added:
 #     • Stock Entry Detail.custom_sales_price (Currency) — copied from MR
 #     • Material Request.custom_user / Stock Entry.custom_user (User column)
+#     • Customer.custom_visit_day / Customer.custom_journey_plan (Journey Plan)
 fixtures = [
     {
         "dt": "Custom Field",
@@ -152,6 +154,8 @@ fixtures = [
                     "Stock Entry-custom_total_sales_amount",
                     "Material Request-custom_user",
                     "Stock Entry-custom_user",
+                    "Customer-custom_visit_day",
+                    "Customer-custom_journey_plan",
                 ],
             ]
         ]

@@ -267,3 +267,64 @@ def add_route_and_sales_reports_to_accounts_workspace():
 	workspace = _accounts_workspace()
 	if workspace:
 		_ensure_card_with_reports(workspace, FINANCE_REPORTS_CARD, FINANCE_REPORTS)
+
+
+def add_journey_plan_to_accounts_workspace():
+	"""Idempotently add a 'Journey Plan' DocType link under a 'Route Management'
+	card on the accounting workspace so field managers can open it from the desk."""
+	workspace = _accounts_workspace()
+	if not workspace:
+		return
+	if not frappe.db.exists("DocType", "Journey Plan"):
+		return
+
+	ws = frappe.get_doc("Workspace", workspace)
+	changed = False
+
+	CARD_LABEL = "Route Management"
+	LINK_TO = "Journey Plan"
+
+	# find or create the card
+	card_start = next(
+		(i for i, l in enumerate(ws.links)
+		 if l.type == "Card Break" and (l.label or "") == CARD_LABEL),
+		None,
+	)
+	if card_start is None:
+		ws.append("links", {
+			"type": "Card Break",
+			"label": CARD_LABEL,
+			"icon": "route",
+			"hidden": 0,
+		})
+		changed = True
+
+	# add the Journey Plan link if not already there
+	already_present = any(
+		l.type == "Link" and l.link_to == LINK_TO for l in ws.links
+	)
+	if not already_present:
+		ws.append("links", {
+			"type": "Link",
+			"label": "Journey Plan",
+			"link_type": "DocType",
+			"link_to": LINK_TO,
+			"is_query_report": 0,
+			"hidden": 0,
+			"onboard": 0,
+		})
+		changed = True
+
+	# v16 content block
+	if _ensure_content_block(ws, "card", "card_name", CARD_LABEL):
+		changed = True
+
+	if not changed:
+		return
+
+	for idx, l in enumerate(ws.links, start=1):
+		l.idx = idx
+
+	ws.flags.ignore_permissions = True
+	ws.save()
+	frappe.db.commit()

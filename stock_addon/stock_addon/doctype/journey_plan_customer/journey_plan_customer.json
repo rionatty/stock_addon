@@ -1,0 +1,74 @@
+{
+ "actions": [],
+ "creation": "2026-06-16 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "customer",
+  "customer_name",
+  "visit_day",
+  "frequency",
+  "week"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "columns": 3,
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "visit_day",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Visit Day",
+   "options": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "default": "Weekly",
+   "fieldname": "frequency",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Frequency",
+   "options": "Weekly\nBi-Weekly",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "description": "Bi-Weekly only. Odd ISO weeks = Week 1, even ISO weeks = Week 2.",
+   "fieldname": "week",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Week",
+   "options": "\nWeek 1\nWeek 2"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-16 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Stock Addon",
+ "name": "Journey Plan Customer",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
