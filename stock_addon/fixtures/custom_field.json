@@ -96,7 +96,7 @@
   "read_only": 1,
   "in_list_view": 0,
   "in_standard_filter": 1,
-  "description": "Weekday (Monday–Saturday) denormalized from the active Journey Plan on submit. Used by the mobile app to resolve today's route.",
+  "description": "Weekday (Monday–Sunday) denormalized from the active Journey Plan on submit. Used by the mobile app to resolve today's route.",
   "module": "Stock Addon"
  },
  {

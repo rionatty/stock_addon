@@ -36,7 +36,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Visit Day",
-   "options": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday",
+   "options": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday",
    "reqd": 1
   },
   {
