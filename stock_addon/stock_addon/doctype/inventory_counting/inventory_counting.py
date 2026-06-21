@@ -11,8 +11,8 @@ class InventoryCounting(Document):
 	def validate(self):
 		self.set_default_price_list()
 		self.default_item_warehouse()
+		self.set_uom_and_conversion()    # must run first so cf is known before qty conversion
 		self.refresh_in_warehouse_qty()
-		self.set_uom_and_conversion()
 		self.calculate_variance()
 		self.validate_batches()
 		self.set_status()

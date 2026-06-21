@@ -112,5 +112,33 @@
   "in_list_view": 0,
   "description": "Active Journey Plan covering this customer. Auto-set on Journey Plan submit/cancel.",
   "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_return_reason",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_return_reason",
+  "label": "Return Reason",
+  "fieldtype": "Select",
+  "options": "\nExpiry\nDamaged\nSlow Moving\nNot Paying\nOthers",
+  "insert_after": "return_against",
+  "depends_on": "eval:doc.is_return==1",
+  "mandatory_depends_on": "eval:doc.is_return==1",
+  "in_list_view": 0,
+  "description": "Reason for this credit note / return. 'Expiry' halves item rates and routes goods to the Reparking Warehouse.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_return_narration",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_return_narration",
+  "label": "Return Narration",
+  "fieldtype": "Small Text",
+  "insert_after": "custom_return_reason",
+  "depends_on": "eval:doc.is_return==1 && doc.custom_return_reason=='Others'",
+  "mandatory_depends_on": "eval:doc.is_return==1 && doc.custom_return_reason=='Others'",
+  "description": "Provide details when Return Reason is 'Others'.",
+  "module": "Stock Addon"
  }
 ]

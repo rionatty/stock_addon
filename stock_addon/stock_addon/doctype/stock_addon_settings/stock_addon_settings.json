@@ -1,0 +1,55 @@
+{
+ "actions": [],
+ "creation": "2026-06-19 12:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Other",
+ "engine": "InnoDB",
+ "field_order": [
+  "expiry_return_section",
+  "reparking_warehouse"
+ ],
+ "fields": [
+  {
+   "fieldname": "expiry_return_section",
+   "fieldtype": "Section Break",
+   "label": "Expiry Returns"
+  },
+  {
+   "fieldname": "reparking_warehouse",
+   "fieldtype": "Link",
+   "label": "Reparking Warehouse",
+   "options": "Warehouse",
+   "description": "Warehouse where returned-Expiry goods are placed. When a Sales Invoice credit note has Return Reason = Expiry, all item warehouses are set to this value automatically and item rates are halved."
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-06-19 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Stock Addon",
+ "name": "Stock Addon Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Accounts Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

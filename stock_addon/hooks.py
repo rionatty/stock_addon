@@ -37,6 +37,7 @@ doctype_js = {
     "Stock Entry" : "public/js/stock_entry.js",
     "Landed Cost Voucher" : "public/js/landed_cost_voucher.js",
     "Delivery Note" : "public/js/delivery_note.js",
+    "Sales Invoice" : "public/js/sales_invoice.js",
     # Journey Plan JS is installed as a Client Script via after_migrate (no bench build needed)
     }
 doctype_list_js = {
@@ -161,6 +162,8 @@ fixtures = [
                     "Stock Entry-custom_user",
                     "Customer-custom_visit_day",
                     "Customer-custom_journey_plan",
+                    "Sales Invoice-custom_return_reason",
+                    "Sales Invoice-custom_return_narration",
                 ],
             ]
         ]
@@ -244,6 +247,9 @@ doc_events = {
     },
     "Landed Cost Voucher": {
         "on_submit": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
+    },
+    "Sales Invoice": {
+        "validate": "stock_addon.stock_addon.doc_events.sales_invoice.validate",
     },
 }
 
