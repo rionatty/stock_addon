@@ -13,10 +13,19 @@ frappe.ui.form.on("Sales Invoice", {
     custom_return_reason(frm) {
         _toggle_return_fields(frm);
 
-        if (frm.doc.is_return && frm.doc.custom_return_reason === "Expiry") {
+        const reason = frm.doc.custom_return_reason;
+
+        if (!frm.doc.is_return || !reason) return;
+
+        if (reason === "Expiry") {
             frappe.confirm(
-                __("Set all item rates to 50% and route goods to the Reparking Warehouse?"),
-                () => _apply_expiry_adjustments(frm)
+                __("Set all item rates to 50% and route goods to the Expiry Return Warehouse?"),
+                () => _apply_warehouse_and_price(frm, "reparking_warehouse", true)
+            );
+        } else if (reason === "Damaged") {
+            frappe.confirm(
+                __("Route returned goods to the Damaged Return Warehouse?"),
+                () => _apply_warehouse_and_price(frm, "damaged_warehouse", false)
             );
         }
     },
@@ -31,15 +40,27 @@ function _toggle_return_fields(frm) {
     );
 }
 
-function _apply_expiry_adjustments(frm) {
+/**
+ * Fetch the given warehouse setting from Stock Addon Settings, apply it to
+ * all item rows, and optionally halve item rates (Expiry only).
+ *
+ * @param {object} frm          - Frappe form object
+ * @param {string} setting_key  - Field name on Stock Addon Settings ("reparking_warehouse" | "damaged_warehouse")
+ * @param {boolean} halve_price - Whether to set rates to 50%
+ */
+function _apply_warehouse_and_price(frm, setting_key, halve_price) {
     frappe.db
-        .get_single_value("Stock Addon Settings", "reparking_warehouse")
+        .get_single_value("Stock Addon Settings", setting_key)
         .then((warehouse) => {
             if (!warehouse) {
+                const label = setting_key === "reparking_warehouse"
+                    ? "Expiry Return Warehouse"
+                    : "Damaged Return Warehouse";
                 frappe.msgprint({
-                    title: __("Reparking Warehouse not set"),
+                    title: __(label + " not set"),
                     message: __(
-                        "Please configure the Reparking Warehouse in <b>Stock Addon Settings</b> first."
+                        "Please configure <b>{0}</b> in Stock Addon Settings first.",
+                        [label]
                     ),
                     indicator: "orange",
                 });
@@ -47,26 +68,26 @@ function _apply_expiry_adjustments(frm) {
             }
 
             frm.doc.items.forEach((item) => {
-                item.rate = flt(item.rate) / 2;
-                item.amount = flt(item.qty) * item.rate;
+                if (halve_price) {
+                    item.rate = flt(item.rate) / 2;
+                    item.amount = flt(item.qty) * item.rate;
+                }
                 item.warehouse = warehouse;
             });
 
             frm.refresh_field("items");
 
-            // Let ERPNext recalculate taxes and totals
+            // Trigger ERPNext total recalculation
             if (frm.cscript && frm.cscript.calculate_taxes_and_totals) {
                 frm.cscript.calculate_taxes_and_totals();
             }
 
             frm.dirty();
 
-            frappe.show_alert(
-                {
-                    message: __("Rates halved · Warehouse set to {0}", [warehouse]),
-                    indicator: "blue",
-                },
-                5
-            );
+            const msg = halve_price
+                ? __("Rates halved · Warehouse set to {0}", [warehouse])
+                : __("Warehouse set to {0}", [warehouse]);
+
+            frappe.show_alert({ message: msg, indicator: "blue" }, 5);
         });
 }

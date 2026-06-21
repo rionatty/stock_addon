@@ -6,7 +6,9 @@
  "engine": "InnoDB",
  "field_order": [
   "expiry_return_section",
-  "reparking_warehouse"
+  "reparking_warehouse",
+  "damaged_return_section",
+  "damaged_warehouse"
  ],
  "fields": [
   {
@@ -17,9 +19,21 @@
   {
    "fieldname": "reparking_warehouse",
    "fieldtype": "Link",
-   "label": "Reparking Warehouse",
+   "label": "Expiry Return Warehouse",
    "options": "Warehouse",
-   "description": "Warehouse where returned-Expiry goods are placed. When a Sales Invoice credit note has Return Reason = Expiry, all item warehouses are set to this value automatically and item rates are halved."
+   "description": "Warehouse where Expiry-return goods are placed. Item warehouses are set here and rates halved automatically when Return Reason = Expiry."
+  },
+  {
+   "fieldname": "damaged_return_section",
+   "fieldtype": "Section Break",
+   "label": "Damaged Returns"
+  },
+  {
+   "fieldname": "damaged_warehouse",
+   "fieldtype": "Link",
+   "label": "Damaged Return Warehouse",
+   "options": "Warehouse",
+   "description": "Warehouse where Damaged-return goods are placed. Item warehouses are set here automatically when Return Reason = Damaged (rates are not changed)."
   }
  ],
  "issingle": 1,
