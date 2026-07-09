@@ -284,6 +284,11 @@ doc_events = {
     "Sales Invoice": {
         "validate": "stock_addon.stock_addon.doc_events.sales_invoice.validate",
     },
+    "Sales Person": {
+        # On creation, auto-provision a Cost Center + Warehouse named after
+        # the sales person's own code.
+        "after_insert": "stock_addon.stock_addon.doc_events.sales_person.after_insert",
+    },
 }
 
 # Scheduled Tasks
