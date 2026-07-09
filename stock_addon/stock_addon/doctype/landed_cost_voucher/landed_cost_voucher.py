@@ -1,31 +1,39 @@
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import flt, now_datetime
 from erpnext.accounts.doctype.purchase_invoice.purchase_invoice import PurchaseInvoice
 from frappe import _
 
 @frappe.whitelist()
 def create_purchase_invoice_from_landed_cost_voucher_taxes(doc, method):
-    frappe.msgprint("Landed Cost Voucher is submitted")
-    frappe.msgprint("Creating Purchase Invoice")
-    
-    # Counter for series
-    series_counter = 1
-    
+    # Group the charge rows by supplier so each supplier gets exactly ONE
+    # Purchase Invoice; every charge stays as its own tax line inside it.
+    supplier_charges = {}
     for tax_row in doc.taxes:
-        supplier = tax_row.custom_supplier or doc.supplier
+        supplier = tax_row.custom_supplier or getattr(doc, "supplier", None)
+        if not supplier:
+            frappe.throw(
+                _("Applicable Charges row #{0} ({1}): please set a Supplier on the charge line.").format(
+                    tax_row.idx, tax_row.description or tax_row.expense_account
+                )
+            )
+        supplier_charges.setdefault(supplier, []).append(tax_row)
+
+    series_counter = 1
+    for supplier, charge_rows in supplier_charges.items():
+        total_amount = sum(flt(r.amount) for r in charge_rows)
 
         pi = frappe.get_doc({
             "doctype": "Purchase Invoice",
             "purchase_invoice_type": "Landed Cost Voucher",
             "naming_series": "PINV-SERVICES-.###.-.YY.",
             "supplier": supplier,
-            "grand_total": tax_row.amount,
+            "grand_total": total_amount,
             "posting_date": now_datetime(),
-            "bill_no": f"LCV-{doc.name}-{series_counter}",  
+            "bill_no": f"LCV-{doc.name}-{series_counter}",
             "bill_date": now_datetime(),
             "ignore_pr_validation": 1,
             "ignore_po_validation": 1,
-            "custom_landed_cost_voucher_reference": doc.name,  # <-- Add this line
+            "custom_landed_cost_voucher_reference": doc.name,
         })
 
         for item_row in doc.items:
@@ -40,13 +48,16 @@ def create_purchase_invoice_from_landed_cost_voucher_taxes(doc, method):
                 "allow_zero_valuation_rate": 1
             })
 
-        pi.append("taxes", {
-            "charge_type": "Actual",
-            "account_head": tax_row.expense_account,
-            "description": tax_row.description,
-            "tax_amount": tax_row.amount,
-            "total": tax_row.amount
-        })
+        # One tax line per charge row — lines are kept separate, only the
+        # invoice (header) is shared per supplier.
+        for tax_row in charge_rows:
+            pi.append("taxes", {
+                "charge_type": "Actual",
+                "account_head": tax_row.expense_account,
+                "description": tax_row.description,
+                "tax_amount": tax_row.amount,
+                "total": tax_row.amount
+            })
 
         # Set flags before inserting
         pi.flags.ignore_pr_validation = True
@@ -55,9 +66,12 @@ def create_purchase_invoice_from_landed_cost_voucher_taxes(doc, method):
         frappe.local.form_dict["_lcv_invoice_doc"] = pi
         pi.insert(ignore_permissions=True)
         frappe.local.form_dict.pop("_lcv_invoice_doc", None)  # Clean up after insert
-        frappe.msgprint(f"Created Purchase Invoice: {pi.name} for supplier: {supplier}")
-        
-        # Increment series counter
+        frappe.msgprint(
+            _("Created Purchase Invoice {0} for {1} with {2} charge line(s), total {3}").format(
+                pi.name, supplier, len(charge_rows), frappe.format_value(total_amount, {"fieldtype": "Currency"})
+            )
+        )
+
         series_counter += 1
 
 # Patch validate to skip PO/PR for LCV
