@@ -146,6 +146,19 @@ after_migrate = [
 #     • Stock Entry Detail.custom_sales_price (Currency) — copied from MR
 #     • Material Request.custom_user / Stock Entry.custom_user (User column)
 #     • Customer.custom_visit_day / Customer.custom_journey_plan (Journey Plan)
+#     • Sales Pro mobile app fields (exact fieldnames the app reads/writes):
+#         Sales Person.custom_mapped_warehouse / custom_serving_warehouse /
+#             custom_cash_account / custom_route_names
+#         Material Request.custom_van_request / custom_van_return /
+#             custom_dales_order / custom_total_qty / custom_total_stock_value /
+#             custom_request_form / custom_narration
+#         Material Request Item.custom_sales_price
+#         Sales Order Item.custom_sales_price
+#         Stock Entry.custom_sales_rep_confirmed
+#         Item Group.custom_van_sell
+#         Lead.custom_tin_number
+#         Sales Invoice.custom_efris_fdn / custom_efris_verification_code /
+#             custom_efris_qr_code
 fixtures = [
     {
         "dt": "Custom Field",
@@ -164,6 +177,26 @@ fixtures = [
                     "Customer-custom_journey_plan",
                     "Sales Invoice-custom_return_reason",
                     "Sales Invoice-custom_return_narration",
+                    # Sales Pro mobile app custom fields
+                    "Sales Person-custom_mapped_warehouse",
+                    "Sales Person-custom_serving_warehouse",
+                    "Sales Person-custom_cash_account",
+                    "Sales Person-custom_route_names",
+                    "Material Request-custom_van_request",
+                    "Material Request-custom_van_return",
+                    "Material Request-custom_dales_order",
+                    "Material Request-custom_total_qty",
+                    "Material Request-custom_total_stock_value",
+                    "Material Request-custom_request_form",
+                    "Material Request-custom_narration",
+                    "Material Request Item-custom_sales_price",
+                    "Sales Order Item-custom_sales_price",
+                    "Stock Entry-custom_sales_rep_confirmed",
+                    "Item Group-custom_van_sell",
+                    "Lead-custom_tin_number",
+                    "Sales Invoice-custom_efris_fdn",
+                    "Sales Invoice-custom_efris_verification_code",
+                    "Sales Invoice-custom_efris_qr_code",
                 ],
             ]
         ]
