@@ -129,3 +129,45 @@ def set_sales_prices_and_totals(doc, method=None):
 
 # Backwards-compatible alias (older hooks referenced this name).
 copy_sales_price_from_material_request = set_sales_prices_and_totals
+
+
+def set_batch_from_work_order(doc, method=None):
+	"""Auto-fill the Work Order's generated batch on the finished-item row.
+
+	When the production receipt (Manufacture Stock Entry) is saved for a
+	Work Order that has a batch generated via the "Generate Batch" button
+	(Work Order.custom_batch_number), stamp that batch on the finished
+	item's row so the produced stock lands in the right batch. A batch
+	already picked by the user is never overwritten.
+	"""
+	if doc.purpose != "Manufacture" or not doc.get("work_order"):
+		return
+
+	wo = frappe.db.get_value(
+		"Work Order", doc.work_order,
+		["custom_batch_number", "production_item"],
+		as_dict=True,
+	)
+	if not wo or not wo.custom_batch_number:
+		return
+
+	# Batch.name normally equals batch_id, but resolve it to be safe.
+	batch_name = frappe.db.get_value(
+		"Batch", {"batch_id": wo.custom_batch_number}, "name"
+	) or wo.custom_batch_number
+
+	for row in doc.items:
+		is_finished = row.get("is_finished_item") or (
+			row.item_code == wo.production_item and row.get("t_warehouse")
+		)
+		if (
+			is_finished
+			and row.item_code == wo.production_item
+			and not row.get("batch_no")
+			and not row.get("serial_and_batch_bundle")
+		):
+			row.batch_no = batch_name
+			# v15+: make Frappe honour the plain batch_no field instead of
+			# expecting a pre-built Serial and Batch Bundle.
+			if row.meta.get_field("use_serial_batch_fields"):
+				row.use_serial_batch_fields = 1

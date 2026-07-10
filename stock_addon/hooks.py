@@ -121,6 +121,7 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_journey_plan_to_accounts_workspace",
     # Client Scripts — push JS files into the DB so they load without bench build
     "stock_addon.stock_addon.client_scripts.install_journey_plan_form_script",
+    "stock_addon.stock_addon.client_scripts.install_work_order_form_script",
     "stock_addon.stock_addon.client_scripts.remove_customer_list_script",
     # Standard GL: turn off add_total_row (the client-side footer doubled
     # Debit/Credit and summed the Running Balance into a meaningless number).
@@ -177,6 +178,10 @@ fixtures = [
                     "Customer-custom_journey_plan",
                     "Sales Invoice-custom_return_reason",
                     "Sales Invoice-custom_return_narration",
+                    "Work Order-custom_batch_number",
+                    "Work Order-custom_batch_no",
+                    "Work Order-custom_mfg",
+                    "Work Order-custom_expiry_date",
                     # Sales Pro mobile app custom fields
                     "Sales Person-custom_mapped_warehouse",
                     "Sales Person-custom_serving_warehouse",
@@ -261,7 +266,10 @@ doc_events = {
             "stock_addon.stock_addon.doctype.stock_entry.stock_entry.get_expense_account",
             # Sales price autofill + row/document totals — validate runs on
             # both save and submit, so totals can never persist empty.
-            "stock_addon.stock_addon.doc_events.stock_entry.set_sales_prices_and_totals"
+            "stock_addon.stock_addon.doc_events.stock_entry.set_sales_prices_and_totals",
+            # Manufacture receipts: auto-fill the Work Order's generated
+            # batch on the finished-item row.
+            "stock_addon.stock_addon.doc_events.stock_entry.set_batch_from_work_order"
         ]
     },
     "Stock Reconciliation": {

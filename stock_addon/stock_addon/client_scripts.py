@@ -64,3 +64,13 @@ def remove_customer_list_script():
     if frappe.db.exists("Client Script", "customer-list-stock-addon"):
         frappe.delete_doc("Client Script", "customer-list-stock-addon", ignore_permissions=True)
         frappe.db.commit()
+
+
+def install_work_order_form_script():
+    """Push public/js/work_order.js into the database as a Form Client Script."""
+    _upsert(
+        name     = "work-order-form-stock-addon",
+        dt       = "Work Order",
+        view     = "Form",
+        filename = "work_order.js",
+    )
