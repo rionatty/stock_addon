@@ -10,7 +10,7 @@ from frappe.utils import now_datetime, flt
 
     
 def create_lc(doc, method):
-    if doc.custom_create_landed_cost_ == "Yes":
+    if doc.get("custom_create_landed_cost_") == "Yes":
             lc = frappe.new_doc("Landed Cost Voucher")
             
             # Append a new Purchase Receipt row to the Landed Cost Voucher
@@ -32,8 +32,13 @@ def create_lc(doc, method):
 # create outward gate pass from purchase receipt when stock is returned
 @frappe.whitelist()
 def create_outward_gate_pass_from_purchase_receipt(doc, method):
+    # "Outward Gate Pass" is a site-built doctype that is NOT shipped with
+    # this app. On sites that don't have it, skip quietly — submitting the
+    # Purchase Receipt must never fail because of a missing optional doctype.
+    if not frappe.db.exists("DocType", "Outward Gate Pass"):
+        return
+
     if doc.docstatus == 1 and doc.is_return == 1:
-        frappe.msgprint("Purchase Return is submitted")
         frappe.msgprint("Creating Outward Gate Pass")
         # Create the Outward Gate Pass document
         ogp = frappe.get_doc({
