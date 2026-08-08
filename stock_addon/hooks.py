@@ -182,6 +182,8 @@ fixtures = [
                     "Work Order-custom_batch_no",
                     "Work Order-custom_mfg",
                     "Work Order-custom_expiry_date",
+                    "Batch-custom_batch_status",
+                    "Quality Inspection-custom_batch_status",
                     # Sales Pro mobile app custom fields
                     "Sales Person-custom_mapped_warehouse",
                     "Sales Person-custom_serving_warehouse",
@@ -296,6 +298,11 @@ doc_events = {
         # On creation, auto-provision a Cost Center + Warehouse named after
         # the sales person's own code.
         "after_insert": "stock_addon.stock_addon.doc_events.sales_person.after_insert",
+    },
+    "Quality Inspection": {
+        # Copy the QC disposition (Batch Status) onto the linked Batch.
+        "on_submit": "stock_addon.stock_addon.doc_events.quality_inspection.sync_batch_status",
+        "on_update_after_submit": "stock_addon.stock_addon.doc_events.quality_inspection.sync_batch_status",
     },
 }
 

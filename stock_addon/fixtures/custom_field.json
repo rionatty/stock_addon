@@ -430,5 +430,35 @@
   "allow_on_submit": 1,
   "description": "Hidden mirror of Batch Number kept for print formats/scripts that reference custom_batch_no.",
   "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Batch-custom_batch_status",
+  "dt": "Batch",
+  "fieldname": "custom_batch_status",
+  "label": "Batch Status",
+  "fieldtype": "Select",
+  "options": "Quarantine\nReleased\nOn-hold\nRejected",
+  "default": "Quarantine",
+  "insert_after": "item",
+  "in_list_view": 1,
+  "in_standard_filter": 1,
+  "description": "QC disposition of this batch. New batches start in Quarantine; Quality Inspection updates it on submit.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Quality Inspection-custom_batch_status",
+  "dt": "Quality Inspection",
+  "fieldname": "custom_batch_status",
+  "label": "Batch Status",
+  "fieldtype": "Select",
+  "options": "Quarantine\nReleased\nOn-hold\nRejected",
+  "default": "Quarantine",
+  "insert_after": "batch_no",
+  "allow_on_submit": 1,
+  "in_list_view": 1,
+  "description": "Disposition for the inspected batch. Copied onto the Batch when this Quality Inspection is submitted (or edited after submit).",
+  "module": "Stock Addon"
  }
 ]
