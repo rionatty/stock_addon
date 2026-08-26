@@ -1,0 +1,203 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"hdr_sap\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Sales Pro Field \\u2194 SAP B1</b></span>\",\"col\":12}},{\"id\":\"sc_settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"SAP Integration Settings\",\"col\":3}},{\"id\":\"sc_log\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"SAP Integration Log\",\"col\":3}},{\"id\":\"sc_mr\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Van Stock Requests\",\"col\":3}},{\"id\":\"sc_si\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoices\",\"col\":3}},{\"id\":\"sc_pay\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Incoming Payments\",\"col\":3}},{\"id\":\"sc_fe\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Field Expenses\",\"col\":3}},{\"id\":\"sc_cust\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customers\",\"col\":3}},{\"id\":\"sc_items\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Items\",\"col\":3}},{\"id\":\"sp_sap1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"hdr_sap_cards\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Integration Flows</b></span>\",\"col\":12}},{\"id\":\"card_push\",\"type\":\"card\",\"data\":{\"card_name\":\"Push to SAP\",\"col\":4}},{\"id\":\"card_masters_sap\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters from SAP\",\"col\":4}},{\"id\":\"card_setup_sap\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Monitoring\",\"col\":4}}]",
+ "creation": "2026-08-26 08:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "tool",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "SAP Integration",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Push to SAP",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sales Invoice",
+   "link_count": 0,
+   "link_to": "Sales Invoice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Van Stock Request (Material Request)",
+   "link_count": 0,
+   "link_to": "Material Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Incoming Payment (Payment Entry)",
+   "link_count": 0,
+   "link_to": "Payment Entry",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Field Expense",
+   "link_count": 0,
+   "link_to": "Field Expense",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Masters from SAP",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item",
+   "link_count": 0,
+   "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Customer",
+   "link_count": 0,
+   "link_to": "Customer",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Sales Person",
+   "link_count": 0,
+   "link_to": "Sales Person",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Setup & Monitoring",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SAP Integration Settings",
+   "link_count": 0,
+   "link_to": "SAP Integration Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "SAP Integration Log",
+   "link_count": 0,
+   "link_to": "SAP Integration Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-08-26 08:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Stock Addon",
+ "name": "SAP Integration",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 99.1,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "SAP Integration Settings",
+   "link_to": "SAP Integration Settings",
+   "type": "DocType"
+  },
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "label": "SAP Integration Log",
+   "link_to": "SAP Integration Log",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "label": "Van Stock Requests",
+   "link_to": "Material Request",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "Sales Invoices",
+   "link_to": "Sales Invoice",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "Incoming Payments",
+   "link_to": "Payment Entry",
+   "type": "DocType"
+  },
+  {
+   "color": "Yellow",
+   "doc_view": "List",
+   "label": "Field Expenses",
+   "link_to": "Field Expense",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Customers",
+   "link_to": "Customer",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Items",
+   "link_to": "Item",
+   "type": "DocType"
+  }
+ ],
+ "title": "SAP Integration"
+}

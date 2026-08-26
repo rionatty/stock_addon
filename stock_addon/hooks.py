@@ -184,6 +184,21 @@ fixtures = [
                     "Work Order-custom_expiry_date",
                     "Batch-custom_batch_status",
                     "Quality Inspection-custom_batch_status",
+                    "Sales Invoice-custom_sap_sync_status",
+                    "Sales Invoice-custom_sap_docentry",
+                    "Sales Invoice-custom_sap_docnum",
+                    "Material Request-custom_sap_sync_status",
+                    "Material Request-custom_sap_docentry",
+                    "Material Request-custom_sap_docnum",
+                    "Payment Entry-custom_sap_sync_status",
+                    "Payment Entry-custom_sap_docentry",
+                    "Payment Entry-custom_sap_docnum",
+                    "Field Expense-custom_sap_sync_status",
+                    "Field Expense-custom_sap_docentry",
+                    "Field Expense-custom_sap_docnum",
+                    "Customer-custom_sap_cardcode",
+                    "Customer-custom_sap_salesperson",
+                    "Stock Entry-custom_sap_docentry",
                     # Sales Pro mobile app custom fields
                     "Sales Person-custom_mapped_warehouse",
                     "Sales Person-custom_serving_warehouse",
@@ -287,12 +302,20 @@ doc_events = {
     },
     "Material Request": {
         "validate": "stock_addon.stock_addon.doctype.material_request.material_request.calculate_total_qty",
+        # SAP: van stock requests go to SAP as Inventory Transfer Requests
+        "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_material_request_submit",
     },
     "Landed Cost Voucher": {
         "on_submit": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
     },
     "Sales Invoice": {
         "validate": "stock_addon.stock_addon.doc_events.sales_invoice.validate",
+        # SAP: invoices / credit notes push on submit
+        "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_sales_invoice_submit",
+    },
+    "Payment Entry": {
+        # SAP: incoming customer payments push on submit
+        "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_payment_entry_submit",
     },
     "Sales Person": {
         # On creation, auto-provision a Cost Center + Warehouse named after
@@ -308,6 +331,20 @@ doc_events = {
 
 # Scheduled Tasks
 # ---------------
+# SAP B1 integration background jobs (all internally guarded by the
+# "Enable SAP Integration" master switch + their own feature toggles).
+scheduler_events = {
+    "cron": {
+        # every 5 minutes: mirror SAP van-warehouse transfers into ERPNext
+        "*/5 * * * *": [
+            "stock_addon.stock_addon.sap_integration.stock_pull.scheduled_pull",
+        ],
+        # hourly: re-sync items + customers (only if auto-sync is on)
+        "0 * * * *": [
+            "stock_addon.stock_addon.sap_integration.masters.scheduled_masters_sync",
+        ],
+    },
+}
 
 # scheduler_events = {
 # 	"all": [

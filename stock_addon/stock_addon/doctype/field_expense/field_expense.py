@@ -141,4 +141,9 @@ def make_journal_entry(source_name):
 	doc.db_set("journal_entry", je.name)
 	doc.db_set("status", "Posted")
 
+	# SAP B1: mirror the expense as a Journal Voucher (guarded by
+	# SAP Integration Settings; a SAP failure never blocks posting).
+	from stock_addon.stock_addon.sap_integration.transactions import on_field_expense_posted
+	on_field_expense_posted(doc)
+
 	return je.name

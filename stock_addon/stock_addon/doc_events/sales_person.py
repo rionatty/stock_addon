@@ -28,6 +28,11 @@ def after_insert(doc, method=None):
     if getattr(doc, "is_group", 0):
         return
 
+    # Bulk-synced sales persons (e.g. the SAP masters sync) opt out of
+    # auto-provisioning to avoid creating a warehouse per synced rep.
+    if doc.flags.get("skip_auto_provision"):
+        return
+
     company = _default_company()
     if not company:
         frappe.log_error(

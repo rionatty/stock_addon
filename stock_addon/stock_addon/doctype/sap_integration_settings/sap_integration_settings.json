@@ -1,0 +1,250 @@
+{
+ "actions": [],
+ "creation": "2026-08-26 08:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "section_connection",
+  "service_layer_url",
+  "company_db",
+  "column_break_conn",
+  "username",
+  "password",
+  "section_masters",
+  "sync_items",
+  "sap_item_group_codes",
+  "default_item_group",
+  "column_break_masters",
+  "sync_customers",
+  "default_customer_group",
+  "default_territory",
+  "auto_sync_masters",
+  "section_push",
+  "push_sales_invoices",
+  "push_credit_notes",
+  "push_transfer_requests",
+  "column_break_push",
+  "push_incoming_payments",
+  "push_expense_journals",
+  "sap_cash_account",
+  "section_pull",
+  "pull_van_transfers",
+  "receipt_mode",
+  "column_break_pull",
+  "default_source_warehouse",
+  "last_transfer_docentry",
+  "section_mapping",
+  "warehouse_mappings"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "description": "Master switch — nothing is pushed or pulled while this is off.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enable SAP Integration"
+  },
+  {
+   "fieldname": "section_connection",
+   "fieldtype": "Section Break",
+   "label": "Service Layer Connection"
+  },
+  {
+   "description": "e.g. https://sap-server:50000/b1s/v1",
+   "fieldname": "service_layer_url",
+   "fieldtype": "Data",
+   "label": "Service Layer URL"
+  },
+  {
+   "fieldname": "company_db",
+   "fieldtype": "Data",
+   "label": "Company Database"
+  },
+  {
+   "fieldname": "column_break_conn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "label": "Username"
+  },
+  {
+   "fieldname": "password",
+   "fieldtype": "Password",
+   "label": "Password"
+  },
+  {
+   "fieldname": "section_masters",
+   "fieldtype": "Section Break",
+   "label": "Master Data Sync (SAP → ERPNext)"
+  },
+  {
+   "default": "1",
+   "fieldname": "sync_items",
+   "fieldtype": "Check",
+   "label": "Sync Items (Finished Goods)"
+  },
+  {
+   "description": "Comma-separated SAP ItemsGroupCode list. Leave empty to sync all sales items.",
+   "fieldname": "sap_item_group_codes",
+   "fieldtype": "Data",
+   "label": "SAP Item Group Codes"
+  },
+  {
+   "fieldname": "default_item_group",
+   "fieldtype": "Link",
+   "label": "Default Item Group",
+   "options": "Item Group"
+  },
+  {
+   "fieldname": "column_break_masters",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "sync_customers",
+   "fieldtype": "Check",
+   "label": "Sync Customers"
+  },
+  {
+   "fieldname": "default_customer_group",
+   "fieldtype": "Link",
+   "label": "Default Customer Group",
+   "options": "Customer Group"
+  },
+  {
+   "fieldname": "default_territory",
+   "fieldtype": "Link",
+   "label": "Default Territory",
+   "options": "Territory"
+  },
+  {
+   "default": "0",
+   "description": "Re-sync items and customers every hour automatically.",
+   "fieldname": "auto_sync_masters",
+   "fieldtype": "Check",
+   "label": "Auto-sync Masters Hourly"
+  },
+  {
+   "fieldname": "section_push",
+   "fieldtype": "Section Break",
+   "label": "Transaction Push (ERPNext → SAP)"
+  },
+  {
+   "default": "1",
+   "fieldname": "push_sales_invoices",
+   "fieldtype": "Check",
+   "label": "Push Sales Invoices"
+  },
+  {
+   "default": "1",
+   "fieldname": "push_credit_notes",
+   "fieldtype": "Check",
+   "label": "Push Credit Notes"
+  },
+  {
+   "default": "1",
+   "description": "Van stock requests (Material Request → SAP Inventory Transfer Request).",
+   "fieldname": "push_transfer_requests",
+   "fieldtype": "Check",
+   "label": "Push Stock Transfer Requests"
+  },
+  {
+   "fieldname": "column_break_push",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "push_incoming_payments",
+   "fieldtype": "Check",
+   "label": "Push Incoming Payments"
+  },
+  {
+   "default": "1",
+   "description": "Field Expenses post to SAP as Journal Vouchers when the Journal Entry is created.",
+   "fieldname": "push_expense_journals",
+   "fieldtype": "Check",
+   "label": "Push Expenses as Journal Vouchers"
+  },
+  {
+   "description": "SAP G/L account code used as the Cash Account on Incoming Payments.",
+   "fieldname": "sap_cash_account",
+   "fieldtype": "Data",
+   "label": "SAP Cash G/L Account Code"
+  },
+  {
+   "fieldname": "section_pull",
+   "fieldtype": "Section Break",
+   "label": "Van Stock Pull (SAP → ERPNext)"
+  },
+  {
+   "default": "1",
+   "description": "Every 5 minutes, SAP transfers into mapped van warehouses are mirrored as submitted Stock Entries.",
+   "fieldname": "pull_van_transfers",
+   "fieldtype": "Check",
+   "label": "Pull Van Transfers"
+  },
+  {
+   "default": "Material Receipt",
+   "description": "Material Receipt: stock appears directly in the van warehouse. Material Transfer: moves from the source warehouse (needs ERPNext stock there).",
+   "fieldname": "receipt_mode",
+   "fieldtype": "Select",
+   "label": "Receipt Mode",
+   "options": "Material Receipt\nMaterial Transfer"
+  },
+  {
+   "fieldname": "column_break_pull",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.receipt_mode=='Material Transfer'",
+   "fieldname": "default_source_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Source Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "description": "High-water mark of processed SAP transfers (managed automatically).",
+   "fieldname": "last_transfer_docentry",
+   "fieldtype": "Int",
+   "label": "Last Transfer DocEntry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_mapping",
+   "fieldtype": "Section Break",
+   "label": "Warehouse Mapping"
+  },
+  {
+   "fieldname": "warehouse_mappings",
+   "fieldtype": "Table",
+   "label": "Warehouse Mappings",
+   "options": "SAP Warehouse Mapping"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-26 08:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Stock Addon",
+ "name": "SAP Integration Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
