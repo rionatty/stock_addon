@@ -328,3 +328,47 @@ def add_journey_plan_to_accounts_workspace():
 	ws.flags.ignore_permissions = True
 	ws.save()
 	frappe.db.commit()
+
+
+# ─── SAP Integration workspace ──────────────────────────────────────────────
+
+def ensure_sap_integration_workspace():
+	"""Self-heal the "SAP Integration" home tile from the JSON shipped in
+	workspace/sap_integration/. Frappe's own workspace sync normally does
+	this during migrate, but this guarantees the tile exists (and its
+	layout stays current) even when that sync is skipped."""
+	import json
+	import os
+
+	path = os.path.join(
+		frappe.get_app_path("stock_addon"),
+		"stock_addon", "workspace", "sap_integration", "sap_integration.json",
+	)
+	if not os.path.exists(path):
+		return
+
+	with open(path) as f:
+		data = json.load(f)
+	for key in ("creation", "modified", "modified_by", "owner", "docstatus", "idx"):
+		data.pop(key, None)
+
+	name = data.get("name") or "SAP Integration"
+	if frappe.db.exists("Workspace", name):
+		ws = frappe.get_doc("Workspace", name)
+		ws.content = data.get("content")
+		ws.public = 1
+		ws.is_hidden = 0
+		ws.set("shortcuts", [])
+		ws.set("links", [])
+		for row in data.get("shortcuts", []):
+			ws.append("shortcuts", row)
+		for row in data.get("links", []):
+			ws.append("links", row)
+		ws.flags.ignore_permissions = True
+		ws.save()
+	else:
+		doc = frappe.get_doc(data)
+		doc.flags.ignore_permissions = True
+		doc.insert(ignore_permissions=True)
+
+	frappe.db.commit()

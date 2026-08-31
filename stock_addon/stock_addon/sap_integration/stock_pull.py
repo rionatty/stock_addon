@@ -106,9 +106,11 @@ def _make_stock_entry(transfer, van_lines, code_to_erp, settings):
     return se
 
 
-def pull_van_transfers():
+def pull_van_transfers(triggered_by="manual"):
     """Pull new SAP Inventory Transfers into mapped van warehouses.
-    Returns a human-readable summary."""
+    Returns a human-readable summary. Every manual run writes a summary
+    row to the SAP Integration Log (scheduled runs only log when they
+    actually pulled or failed something, to keep the log readable)."""
     if not integration_enabled("pull_van_transfers"):
         return _("Van transfer pull is disabled in SAP Integration Settings.")
 
@@ -138,10 +140,12 @@ def pull_van_transfers():
             baseline = cint(newest[0]["DocEntry"]) if newest else 0
             frappe.db.set_single_value("SAP Integration Settings", "last_transfer_docentry", baseline)
             frappe.db.commit()
-            return _(
+            message = _(
                 "Baseline set at SAP transfer DocEntry {0} — only transfers created "
                 "from now on will be pulled."
             ).format(baseline)
+            log_sap("Pull", "Success", "InventoryTransfers", message=message)
+            return message
 
         transfers = client.get_all("InventoryTransfers", params={
             "$filter": f"DocEntry gt {last}",
@@ -187,9 +191,15 @@ def pull_van_transfers():
             frappe.db.set_single_value("SAP Integration Settings", "last_transfer_docentry", new_mark)
             frappe.db.commit()
 
-        return _("Van stock pull: {0} pulled, {1} skipped, {2} failed (checked {3} SAP transfers)").format(
+        summary = _("Van stock pull: {0} pulled, {1} skipped, {2} failed (checked {3} SAP transfers)").format(
             pulled, skipped, failed, len(transfers)
         )
+        # manual runs always leave a visible trace; the 5-minute cron only
+        # logs when something actually happened
+        if triggered_by == "manual" or pulled or failed:
+            log_sap("Pull", "Failed" if failed else "Success",
+                    "InventoryTransfers", message=summary)
+        return summary
     finally:
         frappe.cache().delete_value("sap_van_pull_running")
 
@@ -199,7 +209,7 @@ def scheduled_pull():
     if not integration_enabled("pull_van_transfers"):
         return
     try:
-        pull_van_transfers()
+        pull_van_transfers(triggered_by="scheduler")
     except Exception:
         frappe.log_error(frappe.get_traceback(), "SAP van transfer pull failed")
         log_sap("Pull", "Failed", "InventoryTransfers", message=frappe.get_traceback()[-2000:])

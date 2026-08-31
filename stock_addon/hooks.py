@@ -119,6 +119,8 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
     "stock_addon.stock_addon.workspace_setup.add_summarized_stock_report_shortcut",
     "stock_addon.stock_addon.workspace_setup.add_journey_plan_to_accounts_workspace",
+    # SAP Integration home tile — self-healing upsert from the shipped JSON
+    "stock_addon.stock_addon.workspace_setup.ensure_sap_integration_workspace",
     # Client Scripts — push JS files into the DB so they load without bench build
     "stock_addon.stock_addon.client_scripts.install_journey_plan_form_script",
     "stock_addon.stock_addon.client_scripts.install_work_order_form_script",
