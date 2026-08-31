@@ -15,7 +15,7 @@
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, flt, getdate, today
 
 from stock_addon.stock_addon.sap_integration.connection import (
     SAPClient,
@@ -52,6 +52,110 @@ def _ensure_uom(uom_name):
     return uom_name
 
 
+# ----------------------------------------------------- uoms and groups
+def _uom_maps(client):
+    """Returns (entry_to_code, group_lines, group_base):
+    entry_to_code: SAP UoM AbsEntry -> UoM code
+    group_lines:   SAP UoM group AbsEntry -> its definition rows
+    group_base:    SAP UoM group AbsEntry -> base UoM AbsEntry."""
+    uoms = client.get_all("UnitOfMeasurements", params={"$select": "AbsEntry,Code,Name"})
+    entry_to_code = {u.get("AbsEntry"): (u.get("Code") or u.get("Name")) for u in uoms}
+    groups = client.get_all("UnitOfMeasurementGroups", params={
+        "$select": "AbsEntry,BaseUoM,UoMGroupDefinitionCollection",
+    })
+    group_lines = {g.get("AbsEntry"): (g.get("UoMGroupDefinitionCollection") or []) for g in groups}
+    group_base = {g.get("AbsEntry"): g.get("BaseUoM") for g in groups}
+    return entry_to_code, group_lines, group_base
+
+
+def _next_uoms_idx(item_code):
+    return (frappe.db.sql(
+        """SELECT COALESCE(MAX(idx), 0) FROM `tabUOM Conversion Detail`
+           WHERE parent = %s AND parentfield = 'uoms'""", (item_code,)
+    )[0][0] or 0) + 1
+
+
+def _apply_uom_conversions(item_code, stock_uom, group_entry, inventory_uom_entry,
+                           entry_to_code, group_lines, group_base):
+    """Mirror a SAP UoM group onto the Item's UOM Conversion table.
+
+    SAP group lines define '1 <alt> = BaseQuantity/AlternateQuantity <base>',
+    but ERPNext's conversion_factor is expressed in the ITEM'S stock UoM.
+    Since B1 9.0 an item's inventory UoM may be any member of the group —
+    when it isn't the base, every factor is rebased by the inventory UoM's
+    own factor so quantities convert correctly."""
+    lines = group_lines.get(group_entry, [])
+    base_entry = group_base.get(group_entry)
+
+    # factor of the item's inventory (stock) UoM relative to the group base
+    inv_factor = 1.0
+    if inventory_uom_entry and base_entry and inventory_uom_entry != base_entry:
+        inv_factor = 0.0
+        for line in lines:
+            if line.get("AlternateUoM") == inventory_uom_entry:
+                alt_qty = flt(line.get("AlternateQuantity")) or 1
+                inv_factor = flt(line.get("BaseQuantity")) / alt_qty
+                break
+        if inv_factor <= 0:
+            # inventory UoM not resolvable inside its group — writing factors
+            # here would corrupt every conversion, so skip and log
+            frappe.log_error(
+                f"Item {item_code}: SAP inventory UoM (entry {inventory_uom_entry}) not "
+                f"found in UoM group {group_entry}; conversions skipped.",
+                "SAP UOM sync")
+            return 0
+
+    changed = 0
+    # ERPNext expects the stock UOM itself present with factor 1
+    if not frappe.db.exists("UOM Conversion Detail",
+                            {"parent": item_code, "parenttype": "Item", "uom": stock_uom}):
+        frappe.get_doc({
+            "doctype": "UOM Conversion Detail", "parenttype": "Item",
+            "parentfield": "uoms", "parent": item_code, "idx": _next_uoms_idx(item_code),
+            "uom": stock_uom, "conversion_factor": 1,
+        }).insert(ignore_permissions=True)
+
+    targets = []
+    for line in lines:
+        alt_code = entry_to_code.get(line.get("AlternateUoM"))
+        alt_qty = flt(line.get("AlternateQuantity")) or 1
+        base_factor = flt(line.get("BaseQuantity")) / alt_qty
+        if alt_code and base_factor > 0:
+            targets.append((alt_code, base_factor / inv_factor))
+    # when the stock UoM is an alternate, the group's base UoM is itself a
+    # sellable unit — include it, rebased
+    if inv_factor != 1.0 and base_entry:
+        base_code = entry_to_code.get(base_entry)
+        if base_code:
+            targets.append((base_code, 1.0 / inv_factor))
+
+    for alt_code, factor in targets:
+        uom_name = _ensure_uom(alt_code)
+        if uom_name == stock_uom or factor <= 0:
+            continue
+        existing = frappe.db.get_value(
+            "UOM Conversion Detail",
+            {"parent": item_code, "parenttype": "Item", "uom": uom_name},
+            ["name", "conversion_factor"], as_dict=True,
+        )
+        if existing:
+            if abs(flt(existing.conversion_factor) - factor) > 1e-9:
+                frappe.db.set_value("UOM Conversion Detail", existing.name,
+                                    "conversion_factor", factor, update_modified=False)
+                changed += 1
+        else:
+            frappe.get_doc({
+                "doctype": "UOM Conversion Detail", "parenttype": "Item",
+                "parentfield": "uoms", "parent": item_code, "idx": _next_uoms_idx(item_code),
+                "uom": uom_name, "conversion_factor": factor,
+            }).insert(ignore_permissions=True)
+            changed += 1
+
+    if changed:
+        frappe.clear_document_cache("Item", item_code)
+    return changed
+
+
 # --------------------------------------------------------------- items
 def sync_items():
     settings = get_settings()
@@ -64,12 +168,19 @@ def sync_items():
         filters.append(f"({group_filter})")
 
     rows = client.get_all("Items", params={
-        "$select": "ItemCode,ItemName,InventoryUOM,ManageBatchNumbers,ItemsGroupCode,Frozen,Valid",
+        "$select": "ItemCode,ItemName,InventoryUOM,ManageBatchNumbers,ItemsGroupCode,Frozen,Valid,UoMGroupEntry,InventoryUoMEntry",
         "$filter": " and ".join(filters),
     })
 
+    # UoM groups — a failure here must not sink the item sync itself
+    entry_to_code, group_lines, group_base = {}, {}, {}
+    try:
+        entry_to_code, group_lines, group_base = _uom_maps(client)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "SAP UoM groups fetch failed")
+
     item_group = settings.default_item_group or _first_leaf("Item Group")
-    created = updated = 0
+    created = updated = conversions = 0
     for row in rows:
         if row.get("Frozen") == "tYES" or row.get("Valid") == "tNO":
             continue
@@ -77,25 +188,128 @@ def sync_items():
         name = (row.get("ItemName") or code or "").strip()
         if not code:
             continue
+        stock_uom = _ensure_uom(row.get("InventoryUOM"))
         if frappe.db.exists("Item", code):
             if frappe.db.get_value("Item", code, "item_name") != name:
                 frappe.db.set_value("Item", code, "item_name", name, update_modified=False)
                 updated += 1
-            continue
-        frappe.get_doc({
-            "doctype": "Item",
-            "item_code": code,
-            "item_name": name,
-            "item_group": item_group,
-            "stock_uom": _ensure_uom(row.get("InventoryUOM")),
-            "is_stock_item": 1,
-            "has_batch_no": 1 if _bool(row.get("ManageBatchNumbers")) else 0,
-            "is_sales_item": 1,
-        }).insert(ignore_permissions=True)
-        created += 1
+        else:
+            frappe.get_doc({
+                "doctype": "Item",
+                "item_code": code,
+                "item_name": name,
+                "item_group": item_group,
+                "stock_uom": stock_uom,
+                "is_stock_item": 1,
+                "has_batch_no": 1 if _bool(row.get("ManageBatchNumbers")) else 0,
+                "is_sales_item": 1,
+            }).insert(ignore_permissions=True)
+            created += 1
+        # auto-map the item's SAP UoM group (cartons/pieces etc.)
+        if row.get("UoMGroupEntry") in group_lines:
+            try:
+                conversions += _apply_uom_conversions(
+                    code, stock_uom, row["UoMGroupEntry"], row.get("InventoryUoMEntry"),
+                    entry_to_code, group_lines, group_base
+                )
+            except Exception:
+                frappe.log_error(frappe.get_traceback(), f"UOM conversion sync failed for {code}")
 
-    msg = _("Items synced from SAP: {0} created, {1} updated, {2} scanned").format(created, updated, len(rows))
+    msg = _("Items synced from SAP: {0} created, {1} updated, {2} UOM conversions mapped, {3} scanned").format(
+        created, updated, conversions, len(rows))
     log_sap("Masters", "Success", "Items", message=msg)
+    frappe.db.commit()
+    return msg
+
+
+# --------------------------------------------------------------- taxes
+def _current_rate(lines):
+    """The rate effective TODAY — not simply the last row, which may be a
+    pre-loaded future rate change."""
+    if not lines:
+        return 0
+    current = getdate(today())
+    dated = []
+    for line in lines:
+        try:
+            dated.append((getdate(line.get("Effectivefrom")), flt(line.get("Rate"))))
+        except Exception:
+            dated.append((current, flt(line.get("Rate"))))
+    dated.sort(key=lambda pair: pair[0])
+    effective = [rate for eff_date, rate in dated if eff_date <= current]
+    return effective[-1] if effective else dated[0][1]
+
+
+def sync_taxes():
+    """Pull active SAP VAT groups into Settings → Tax Mapping. The back
+    office links each code to an ERPNext Sales Taxes and Charges Template;
+    pushed invoice lines then carry the SAP VatGroup."""
+    settings = frappe.get_doc("SAP Integration Settings")
+    client = SAPClient(settings)
+    rows = client.get_all("VatGroups", params={
+        "$select": "Code,Name,Category,Inactive,VatGroups_Lines",
+        # only output (sales) tax codes — /Invoices rejects input-category
+        # VatGroups, so purchase codes must never be mappable here
+        "$filter": "Category eq 'bovcOutputTax'",
+    })
+
+    existing = {m.sap_tax_code: m for m in (settings.tax_mappings or [])}
+    added = refreshed = 0
+    for row in rows:
+        if row.get("Inactive") == "tYES":
+            continue
+        code = row.get("Code")
+        if not code:
+            continue
+        rate = _current_rate(row.get("VatGroups_Lines") or [])
+        if code in existing:
+            m = existing[code]
+            if m.tax_name != row.get("Name") or flt(m.rate) != rate:
+                m.tax_name, m.rate, m.category = row.get("Name"), rate, row.get("Category")
+                refreshed += 1
+        else:
+            settings.append("tax_mappings", {
+                "sap_tax_code": code,
+                "tax_name": row.get("Name"),
+                "rate": rate,
+                "category": row.get("Category"),
+            })
+            added += 1
+
+    settings.flags.ignore_permissions = True
+    settings.save()
+    msg = _("Tax codes synced from SAP: {0} added, {1} refreshed, {2} scanned").format(
+        added, refreshed, len(rows))
+    log_sap("Masters", "Success", "VatGroups", message=msg)
+    frappe.db.commit()
+    return msg
+
+
+# ---------------------------------------------------------- currencies
+def sync_currencies():
+    """Pull SAP currencies and make sure each exists and is enabled in
+    ERPNext, so customer currencies from SAP always resolve."""
+    client = SAPClient()
+    rows = client.get_all("Currencies", params={"$select": "Code,Name"})
+    enabled = created = 0
+    for row in rows:
+        code = (row.get("Code") or "").strip()
+        if not code or len(code) > 5 or code == "##":
+            continue
+        if frappe.db.exists("Currency", code):
+            if not frappe.db.get_value("Currency", code, "enabled"):
+                frappe.db.set_value("Currency", code, "enabled", 1, update_modified=False)
+                enabled += 1
+        else:
+            frappe.get_doc({
+                "doctype": "Currency",
+                "currency_name": code,
+                "enabled": 1,
+            }).insert(ignore_permissions=True)
+            created += 1
+    msg = _("Currencies synced from SAP: {0} created, {1} enabled, {2} scanned").format(
+        created, enabled, len(rows))
+    log_sap("Masters", "Success", "Currencies", message=msg)
     frappe.db.commit()
     return msg
 
@@ -210,6 +424,10 @@ def scheduled_masters_sync():
             sync_items()
         if cint(get_settings().sync_customers):
             sync_customers()
+        if cint(get_settings().get("sync_taxes")):
+            sync_taxes()
+        if cint(get_settings().get("sync_currencies")):
+            sync_currencies()
     except Exception:
         frappe.log_error(frappe.get_traceback(), "SAP scheduled masters sync failed")
         log_sap("Masters", "Failed", "scheduled", message=frappe.get_traceback()[-2000:])

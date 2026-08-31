@@ -17,6 +17,9 @@ class SAPIntegrationSettings(Document):
     def validate(self):
         if self.enabled and not (self.service_layer_url and self.company_db and self.username):
             frappe.throw(_("To enable the SAP integration, fill in Service Layer URL, Company Database and Username."))
+        if self.enabled and not self.go_live_date:
+            from frappe.utils import nowdate
+            self.go_live_date = nowdate()
 
 
 def _require_manager():
@@ -45,10 +48,31 @@ def sync_customers_now():
 
 
 @frappe.whitelist()
+def sync_taxes_now():
+    _require_manager()
+    from stock_addon.stock_addon.sap_integration.masters import sync_taxes
+    return sync_taxes()
+
+
+@frappe.whitelist()
+def sync_currencies_now():
+    _require_manager()
+    from stock_addon.stock_addon.sap_integration.masters import sync_currencies
+    return sync_currencies()
+
+
+@frappe.whitelist()
 def pull_transfers_now():
     _require_manager()
     from stock_addon.stock_addon.sap_integration.stock_pull import pull_van_transfers
     return pull_van_transfers()
+
+
+@frappe.whitelist()
+def push_pending_now():
+    _require_manager()
+    from stock_addon.stock_addon.sap_integration.transactions import push_pending
+    return push_pending()
 
 
 @frappe.whitelist()

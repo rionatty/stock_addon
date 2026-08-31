@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"hdr_sap\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Sales Pro Field \\u2194 SAP B1</b></span>\",\"col\":12}},{\"id\":\"sc_settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"SAP Integration Settings\",\"col\":3}},{\"id\":\"sc_log\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"SAP Integration Log\",\"col\":3}},{\"id\":\"sc_mr\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Van Stock Requests\",\"col\":3}},{\"id\":\"sc_si\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoices\",\"col\":3}},{\"id\":\"sc_pay\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Incoming Payments\",\"col\":3}},{\"id\":\"sc_fe\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Field Expenses\",\"col\":3}},{\"id\":\"sc_cust\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customers\",\"col\":3}},{\"id\":\"sc_items\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Items\",\"col\":3}},{\"id\":\"sp_sap1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"hdr_sap_cards\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Integration Flows</b></span>\",\"col\":12}},{\"id\":\"card_push\",\"type\":\"card\",\"data\":{\"card_name\":\"Push to SAP\",\"col\":4}},{\"id\":\"card_masters_sap\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters from SAP\",\"col\":4}},{\"id\":\"card_setup_sap\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Monitoring\",\"col\":4}}]",
+ "content": "[{\"id\":\"hdr_sap\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Sales Pro Field \\u2194 SAP B1</b></span>\",\"col\":12}},{\"id\":\"sc_settings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"SAP Integration Settings\",\"col\":3}},{\"id\":\"sc_log\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"SAP Integration Log\",\"col\":3}},{\"id\":\"sc_monitor\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sync Monitor\",\"col\":3}},{\"id\":\"sc_mr\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Van Stock Requests\",\"col\":3}},{\"id\":\"sc_si\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoices\",\"col\":3}},{\"id\":\"sc_pay\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Incoming Payments\",\"col\":3}},{\"id\":\"sc_fe\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Field Expenses\",\"col\":3}},{\"id\":\"sc_cust\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customers\",\"col\":3}},{\"id\":\"sc_items\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Items\",\"col\":3}},{\"id\":\"sp_sap1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"hdr_sap_cards\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Integration Flows</b></span>\",\"col\":12}},{\"id\":\"card_push\",\"type\":\"card\",\"data\":{\"card_name\":\"Push to SAP\",\"col\":4}},{\"id\":\"card_masters_sap\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters from SAP\",\"col\":4}},{\"id\":\"card_setup_sap\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup & Monitoring\",\"col\":4}}]",
  "creation": "2026-08-26 08:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -104,10 +104,20 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Setup & Monitoring",
-   "link_count": 2,
+   "link_count": 3,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "SAP Sync Monitor",
+   "link_count": 0,
+   "link_to": "SAP Sync Monitor",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
   },
   {
    "hidden": 0,
@@ -155,6 +165,13 @@
    "label": "SAP Integration Log",
    "link_to": "SAP Integration Log",
    "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "label": "Sync Monitor",
+   "link_to": "SAP Sync Monitor",
+   "type": "Report"
   },
   {
    "color": "Orange",

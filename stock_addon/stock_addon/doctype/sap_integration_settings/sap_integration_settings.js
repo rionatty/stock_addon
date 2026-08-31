@@ -28,8 +28,12 @@ frappe.ui.form.on("SAP Integration Settings", {
 		if (frm.doc.enabled) {
 			frm.add_custom_button(__("Sync Items"), () => call("sync_items_now", "Syncing items from SAP"), __("Masters"));
 			frm.add_custom_button(__("Sync Customers"), () => call("sync_customers_now", "Syncing customers from SAP"), __("Masters"));
+			frm.add_custom_button(__("Sync Taxes"), () => call("sync_taxes_now", "Syncing tax codes from SAP"), __("Masters"));
+			frm.add_custom_button(__("Sync Currencies"), () => call("sync_currencies_now", "Syncing currencies from SAP"), __("Masters"));
 			frm.add_custom_button(__("Pull Van Transfers"), () => call("pull_transfers_now", "Pulling van transfers from SAP"), __("Transactions"));
+			frm.add_custom_button(__("Send Pending to SAP"), () => call("push_pending_now", "Sending pending documents to SAP"), __("Transactions"));
 			frm.add_custom_button(__("Retry Failed Pushes"), () => call("retry_failed_now", "Retrying failed pushes"), __("Transactions"));
+			frm.add_custom_button(__("Sync Monitor"), () => frappe.set_route("query-report", "SAP Sync Monitor"));
 		}
 
 		frm.dashboard.set_headline(

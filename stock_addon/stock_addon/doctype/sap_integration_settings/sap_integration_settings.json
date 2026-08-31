@@ -11,6 +11,7 @@
   "column_break_conn",
   "username",
   "password",
+  "go_live_date",
   "section_masters",
   "sync_items",
   "sap_item_group_codes",
@@ -19,6 +20,8 @@
   "sync_customers",
   "default_customer_group",
   "default_territory",
+  "sync_taxes",
+  "sync_currencies",
   "auto_sync_masters",
   "section_push",
   "push_sales_invoices",
@@ -35,7 +38,9 @@
   "default_source_warehouse",
   "last_transfer_docentry",
   "section_mapping",
-  "warehouse_mappings"
+  "warehouse_mappings",
+  "section_tax_mapping",
+  "tax_mappings"
  ],
  "fields": [
   {
@@ -74,6 +79,13 @@
    "fieldname": "password",
    "fieldtype": "Password",
    "label": "Password"
+  },
+  {
+   "description": "Stamped when the integration is first enabled. 'Send Pending to SAP' only auto-sends never-attempted documents created on or after this date.",
+   "fieldname": "go_live_date",
+   "fieldtype": "Date",
+   "label": "Go-Live Date",
+   "read_only": 1
   },
   {
    "fieldname": "section_masters",
@@ -121,8 +133,22 @@
    "options": "Territory"
   },
   {
+   "default": "1",
+   "description": "Pull active SAP VAT codes into the Tax Mapping table below.",
+   "fieldname": "sync_taxes",
+   "fieldtype": "Check",
+   "label": "Sync Tax Codes"
+  },
+  {
+   "default": "1",
+   "description": "Ensure every SAP currency exists and is enabled in ERPNext.",
+   "fieldname": "sync_currencies",
+   "fieldtype": "Check",
+   "label": "Sync Currencies"
+  },
+  {
    "default": "0",
-   "description": "Re-sync items and customers every hour automatically.",
+   "description": "Re-sync items, customers, taxes and currencies every hour automatically.",
    "fieldname": "auto_sync_masters",
    "fieldtype": "Check",
    "label": "Auto-sync Masters Hourly"
@@ -222,6 +248,19 @@
    "fieldtype": "Table",
    "label": "Warehouse Mappings",
    "options": "SAP Warehouse Mapping"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_tax_mapping",
+   "fieldtype": "Section Break",
+   "label": "Tax Mapping"
+  },
+  {
+   "description": "Filled by 'Sync Taxes'. Link each SAP code to the ERPNext Sales Taxes template it corresponds to — pushed invoice lines then carry the SAP VatGroup.",
+   "fieldname": "tax_mappings",
+   "fieldtype": "Table",
+   "label": "Tax Mappings",
+   "options": "SAP Tax Mapping"
   }
  ],
  "index_web_pages_for_search": 1,

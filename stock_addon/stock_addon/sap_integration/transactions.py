@@ -148,9 +148,23 @@ def _guarded(pusher, doc, endpoint):
         )
 
 
+def _vat_group_for(doc):
+    """SAP VatGroup for the invoice's ERPNext tax template, via the
+    Settings → Tax Mapping table. None when unmapped (SAP then applies
+    the item/BP default tax)."""
+    template = doc.get("taxes_and_charges")
+    if not template:
+        return None
+    for m in (get_settings().get("tax_mappings") or []):
+        if m.erpnext_tax_template == template:
+            return m.sap_tax_code
+    return None
+
+
 # ------------------------------------------------------- sales invoice
 def push_sales_invoice_doc(doc):
     endpoint = "CreditNotes" if cint(doc.is_return) else "Invoices"
+    vat_group = _vat_group_for(doc)
     lines = []
     for item in doc.items:
         line = {
@@ -158,6 +172,8 @@ def push_sales_invoice_doc(doc):
             "Quantity": abs(flt(item.qty)),
             "UnitPrice": flt(item.rate),
         }
+        if vat_group:
+            line["VatGroup"] = vat_group
         wh = _sap_warehouse(item.warehouse)
         if wh:
             line["WarehouseCode"] = wh
@@ -310,10 +326,13 @@ def on_field_expense_posted(doc):
 
 # --------------------------------------------------------------- retry
 PUSHERS = {
-    # doctype: (pusher, extra filters — never re-push cancelled/unposted docs)
+    # doctype: (pusher, extra filters — never re-push cancelled/unposted
+    # docs, and only docs of the kinds the on_submit hooks would push)
     "Sales Invoice": (push_sales_invoice_doc, {"docstatus": 1}),
-    "Material Request": (push_material_request_doc, {"docstatus": 1}),
-    "Payment Entry": (push_payment_entry_doc, {"docstatus": 1}),
+    "Material Request": (push_material_request_doc,
+                         {"docstatus": 1, "material_request_type": "Material Transfer"}),
+    "Payment Entry": (push_payment_entry_doc,
+                      {"docstatus": 1, "payment_type": "Receive", "party_type": "Customer"}),
     "Field Expense": (push_field_expense_doc, {"status": "Posted"}),
 }
 
@@ -337,6 +356,83 @@ def _adopt_existing_invoice(doc):
     log_sap("Push", "Success", endpoint, doc.doctype, doc.name, rows[0].get("DocEntry"),
             "Adopted existing SAP document found by NumAtCard (earlier push had timed out)")
     return True
+
+
+# which settings toggle authorizes pushing each doctype
+PUSH_FLAGS = {
+    "Material Request": "push_transfer_requests",
+    "Payment Entry": "push_incoming_payments",
+    "Field Expense": "push_expense_journals",
+}
+
+
+def push_pending(limit=100):
+    """Push everything not yet in SAP: docs whose sync status is Failed,
+    plus never-attempted docs created on/after the go-live date (so a
+    brownfield site's history is never mass-posted). Respects the master
+    switch and every per-flow toggle, exactly like the on_submit hooks."""
+    if not integration_enabled():
+        return _("SAP integration is disabled — enable it in SAP Integration Settings first.")
+
+    settings = get_settings()
+    go_live = settings.get("go_live_date")
+
+    results = []
+    for doctype, (pusher, extra_filters) in PUSHERS.items():
+        if doctype in PUSH_FLAGS and not cint(settings.get(PUSH_FLAGS[doctype])):
+            continue
+        if doctype == "Sales Invoice" and not (
+            cint(settings.get("push_sales_invoices")) or cint(settings.get("push_credit_notes"))
+        ):
+            continue
+
+        names = _pending_names(doctype, extra_filters, go_live, limit)
+
+        ok = 0
+        for name in names:
+            try:
+                doc = frappe.get_doc(doctype, name)
+                if doctype == "Sales Invoice":
+                    flag = "push_credit_notes" if cint(doc.is_return) else "push_sales_invoices"
+                    if not cint(settings.get(flag)):
+                        continue
+                    if _adopt_existing_invoice(doc):
+                        ok += 1
+                        continue
+                if pusher(doc):
+                    ok += 1
+            except Exception as e:
+                log_sap("Push", "Failed", "push_pending", doctype, name, message=str(e))
+        if names:
+            results.append(f"{doctype}: {ok}/{len(names)} pushed")
+    frappe.db.commit()
+    return ", ".join(results) or _("Nothing pending — everything already in SAP.")
+
+
+def _pending_names(doctype, extra_filters, go_live, limit):
+    """Failed docs (any age) + never-attempted docs from go-live onward."""
+    failed = frappe.get_all(
+        doctype,
+        filters=dict(extra_filters, custom_sap_sync_status="Failed"),
+        pluck="name", limit=limit,
+    )
+    unsent = []
+    if go_live:
+        unsent = frappe.get_all(
+            doctype,
+            filters=dict(extra_filters, creation=(">=", str(go_live))),
+            or_filters=[
+                ["custom_sap_sync_status", "is", "not set"],
+                ["custom_sap_sync_status", "=", ""],
+            ],
+            pluck="name", limit=limit,
+        )
+    seen, out = set(), []
+    for name in failed + unsent:
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out[:limit]
 
 
 def retry_failed():
