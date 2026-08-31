@@ -52,6 +52,34 @@ def _ensure_uom(uom_name):
     return uom_name
 
 
+def _ensure_tree_leaf(doctype, name_field, parent_field, leaf_name):
+    """Create a leaf node (e.g. an Item Group / Customer Group mirroring a
+    SAP group) under the tree root if it doesn't exist. Returns its name,
+    or None when it can't be created."""
+    leaf_name = (leaf_name or "").strip()
+    if not leaf_name:
+        return None
+    # return the STORED docname (exists() matches case-insensitively on
+    # MariaDB — returning the SAP casing would make every re-home
+    # comparison a phantom diff that rewrites on each sync)
+    stored = frappe.db.get_value(doctype, leaf_name, "name")
+    if stored:
+        return stored
+    from frappe.utils.nestedset import get_root_of
+    try:
+        root = get_root_of(doctype)
+        frappe.get_doc({
+            "doctype": doctype,
+            name_field: leaf_name,
+            parent_field: root,
+            "is_group": 0,
+        }).insert(ignore_permissions=True)
+        return leaf_name
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"SAP sync: could not create {doctype} '{leaf_name}'")
+        return None
+
+
 # ----------------------------------------------------- uoms and groups
 def _uom_maps(client):
     """Returns (entry_to_code, group_lines, group_base):
@@ -179,7 +207,22 @@ def sync_items():
     except Exception:
         frappe.log_error(frappe.get_traceback(), "SAP UoM groups fetch failed")
 
-    item_group = settings.default_item_group or _first_leaf("Item Group")
+    # real SAP item groups (Number -> GroupName), mirrored 1:1 so items
+    # keep exactly the grouping they have in SAP. Resolved ONCE per run —
+    # a group that fails to create is logged once, not once per item.
+    resolved_item_groups = {}
+    try:
+        for number, group_name in {
+            g.get("Number"): g.get("GroupName")
+            for g in client.get_all("ItemGroups", params={"$select": "Number,GroupName"})
+        }.items():
+            resolved_item_groups[number] = _ensure_tree_leaf(
+                "Item Group", "item_group_name", "parent_item_group", group_name
+            )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "SAP ItemGroups fetch failed")
+
+    default_group = settings.default_item_group or _first_leaf("Item Group")
     created = updated = conversions = 0
     for row in rows:
         if row.get("Frozen") == "tYES" or row.get("Valid") == "tNO":
@@ -189,9 +232,21 @@ def sync_items():
         if not code:
             continue
         stock_uom = _ensure_uom(row.get("InventoryUOM"))
+        # the item's REAL SAP group, mirrored into ERPNext (fallback: default)
+        resolved_group = resolved_item_groups.get(row.get("ItemsGroupCode"))
+        item_group = resolved_group or default_group
+
         if frappe.db.exists("Item", code):
-            if frappe.db.get_value("Item", code, "item_name") != name:
-                frappe.db.set_value("Item", code, "item_name", name, update_modified=False)
+            current = frappe.db.get_value("Item", code, ["item_name", "item_group"], as_dict=True)
+            changes = {}
+            if current.item_name != name:
+                changes["item_name"] = name
+            # SAP is the master: whenever its group resolves, it wins —
+            # but never re-home on a failed resolution (fallback)
+            if resolved_group and current.item_group != resolved_group:
+                changes["item_group"] = resolved_group
+            if changes:
+                frappe.db.set_value("Item", code, changes, update_modified=False)
                 updated += 1
         else:
             frappe.get_doc({
@@ -354,11 +409,28 @@ def sync_customers():
         frappe.log_error(frappe.get_traceback(), "SAP SalesPersons sync failed")
 
     rows = client.get_all("BusinessPartners", params={
-        "$select": "CardCode,CardName,CardType,Currency,SalesPersonCode,Frozen,Valid",
+        "$select": "CardCode,CardName,CardType,Currency,SalesPersonCode,Frozen,Valid,GroupCode",
         "$filter": "CardType eq 'cCustomer'",
     })
 
-    customer_group = settings.default_customer_group or _first_leaf("Customer Group")
+    # real SAP customer groups (Code -> Name), mirrored 1:1 and resolved
+    # once per run (failed creations log once, not once per customer)
+    resolved_bp_groups = {}
+    try:
+        for group_code, group_name in {
+            g.get("Code"): g.get("Name")
+            for g in client.get_all("BusinessPartnerGroups", params={
+                "$select": "Code,Name,Type",
+                "$filter": "Type eq 'bbpgt_CustomerGroup'",
+            })
+        }.items():
+            resolved_bp_groups[group_code] = _ensure_tree_leaf(
+                "Customer Group", "customer_group_name", "parent_customer_group", group_name
+            )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "SAP BusinessPartnerGroups fetch failed")
+
+    default_customer_group = settings.default_customer_group or _first_leaf("Customer Group")
     territory = settings.default_territory or _first_leaf("Territory")
 
     created = updated = 0
@@ -374,6 +446,8 @@ def sync_customers():
         if len(currency) != 3:  # '##' = multi-currency BP — leave default
             currency = None
         sales_person = sales_person_map.get(row.get("SalesPersonCode"))
+        resolved_group = resolved_bp_groups.get(row.get("GroupCode"))
+        customer_group = resolved_group or default_customer_group
 
         existing = frappe.db.get_value("Customer", {"custom_sap_cardcode": card_code}, "name")
         if not existing and frappe.db.exists("Customer", card_name):
@@ -390,6 +464,11 @@ def sync_customers():
                 values["default_currency"] = currency
             if sales_person:
                 values["custom_sap_salesperson"] = sales_person
+            # SAP is the master: whenever its group resolves, it wins —
+            # but never re-home on a failed resolution (fallback)
+            if resolved_group and \
+                    frappe.db.get_value("Customer", existing, "customer_group") != resolved_group:
+                values["customer_group"] = resolved_group
             frappe.db.set_value("Customer", existing, values, update_modified=False)
             updated += 1
             continue
