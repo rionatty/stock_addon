@@ -358,6 +358,11 @@ def ensure_sap_integration_workspace():
 		ws.content = data.get("content")
 		ws.public = 1
 		ws.is_hidden = 0
+		# v16: Workspace.type is mandatory and the home grid only renders
+		# type "Workspace" — a NULL (from an older sync) hides the tile
+		# and fails validation on save
+		if ws.meta.get_field("type"):
+			ws.type = data.get("type") or "Workspace"
 		ws.set("shortcuts", [])
 		ws.set("links", [])
 		for row in data.get("shortcuts", []):
