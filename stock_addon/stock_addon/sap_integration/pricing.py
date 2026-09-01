@@ -36,6 +36,7 @@ from frappe.utils import cint, flt, getdate
 
 from stock_addon.stock_addon.sap_integration.connection import (
     SAPClient,
+    single_flight,
     get_settings,
     integration_enabled,
     log_sap,
@@ -403,6 +404,13 @@ def sync_pricing():
     if not integration_enabled():
         return _("SAP integration is disabled — enable it in SAP Integration Settings first.")
 
+    with single_flight("pricing") as lock:
+        if not lock.acquired:
+            return _("A pricing sync is already running — try again in a moment.")
+        return _sync_pricing()
+
+
+def _sync_pricing():
     client = SAPClient()
     results, failures = [], 0
     for label, fn in TIERS:

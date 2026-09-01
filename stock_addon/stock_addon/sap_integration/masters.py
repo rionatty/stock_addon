@@ -19,6 +19,7 @@ from frappe.utils import cint, flt, getdate, today
 
 from stock_addon.stock_addon.sap_integration.connection import (
     SAPClient,
+    single_flight,
     get_settings,
     integration_enabled,
     log_sap,
@@ -94,6 +95,53 @@ def _uom_maps(client):
     group_lines = {g.get("AbsEntry"): (g.get("UoMGroupDefinitionCollection") or []) for g in groups}
     group_base = {g.get("AbsEntry"): g.get("BaseUoM") for g in groups}
     return entry_to_code, group_lines, group_base
+
+
+def _normalise(text):
+    """Fold case and whitespace so 'Bakers  Flour ' == 'bakers flour'."""
+    return " ".join((text or "").split()).casefold()
+
+
+def _adoption_index(series_prefixes):
+    """Series-named items indexed by normalised name and by barcode.
+
+    Built once per run so a SAP item can find a pre-existing record for
+    the same product and rename it, instead of creating a second item
+    alongside it. Exact-name matching alone missed twins that differed
+    only by case or spacing.
+    """
+    by_name, by_barcode = {}, {}
+    if not series_prefixes:
+        return by_name, by_barcode
+
+    conditions = " OR ".join(["item.name LIKE %s"] * len(series_prefixes))
+    values = tuple(p + "%" for p in series_prefixes)
+    rows = frappe.db.sql(
+        f"""
+        SELECT item.name, item.item_name
+        FROM `tabItem` item
+        WHERE ({conditions})
+          AND IFNULL(item.variant_of, '') = ''
+        """,
+        values, as_dict=True,
+    )
+    for row in rows:
+        by_name.setdefault(_normalise(row.item_name), []).append(row.name)
+
+    barcodes = frappe.db.sql(
+        f"""
+        SELECT barcode.parent AS name, barcode.barcode
+        FROM `tabItem Barcode` barcode
+        JOIN `tabItem` item ON item.name = barcode.parent
+        WHERE ({conditions})
+        """,
+        values, as_dict=True,
+    )
+    for row in barcodes:
+        code = (row.barcode or "").strip()
+        if code:
+            by_barcode.setdefault(code, []).append(row.name)
+    return by_name, by_barcode
 
 
 def _next_uoms_idx(item_code):
@@ -186,6 +234,13 @@ def _apply_uom_conversions(item_code, stock_uom, group_entry, inventory_uom_entr
 
 # --------------------------------------------------------------- items
 def sync_items():
+    with single_flight("items") as lock:
+        if not lock.acquired:
+            return _("An item sync is already running — try again in a moment.")
+        return _sync_items()
+
+
+def _sync_items():
     settings = get_settings()
     client = SAPClient(settings)
 
@@ -196,7 +251,7 @@ def sync_items():
         filters.append(f"({group_filter})")
 
     rows = client.get_all("Items", params={
-        "$select": "ItemCode,ItemName,InventoryUOM,ManageBatchNumbers,ItemsGroupCode,Frozen,Valid,UoMGroupEntry,InventoryUoMEntry",
+        "$select": "ItemCode,ItemName,InventoryUOM,ManageBatchNumbers,ItemsGroupCode,Frozen,Valid,UoMGroupEntry,InventoryUoMEntry,BarCode",
         "$filter": " and ".join(filters),
     })
 
@@ -232,7 +287,8 @@ def sync_items():
     series_options = (frappe.get_meta("Item").get_field("naming_series").options or "") \
         if frappe.get_meta("Item").get_field("naming_series") else ""
     series_prefixes = [o.split(".")[0] for o in series_options.split("\n") if o.strip()] or ["STO-ITEM-"]
-    created = updated = renamed = conversions = 0
+    adopt_by_name, adopt_by_barcode = _adoption_index(series_prefixes)
+    created = updated = renamed = conversions = skipped = 0
     for row in rows:
         if row.get("Frozen") == "tYES" or row.get("Valid") == "tNO":
             continue
@@ -247,28 +303,28 @@ def sync_items():
 
         exists = frappe.db.exists("Item", code)
         if not exists:
-            # Self-heal items synced before the naming fix: with Stock
-            # Settings "Item Naming By = Naming Series", Item.autoname used
-            # to replace the SAP code with a series name (STO-ITEM-0001).
-            # Adopt such an item back by its exact SAP item name — only an
-            # unambiguous, series-named match (never a deliberately-coded
-            # or differently-coded SAP item).
-            same_name = frappe.get_all(
-                "Item",
-                filters={"item_name": name, "variant_of": ("is", "not set")},
-                or_filters=[["name", "like", f"{p}%"] for p in series_prefixes],
-                pluck="name", limit=2,
-            )
-            if len(same_name) == 1 and same_name[0] != code and same_name[0] not in sap_codes:
+            # Adopt a pre-existing record for this same product instead of
+            # creating a twin beside it. Candidates are series-named items
+            # (victims of the old autoname behaviour) matched by barcode
+            # first, then by normalised name. A match is CLAIMED — popped
+            # from the index — so two SAP items can never adopt the same
+            # ERPNext record.
+            barcode = (row.get("BarCode") or "").strip()
+            candidates = adopt_by_barcode.pop(barcode, None) if barcode else None
+            if not candidates:
+                candidates = adopt_by_name.pop(_normalise(name), None)
+
+            if candidates and len(candidates) == 1 and candidates[0] != code \
+                    and candidates[0] not in sap_codes:
                 try:
                     from frappe.model.rename_doc import rename_doc as _rename_doc
-                    _rename_doc(doctype="Item", old=same_name[0], new=code,
+                    _rename_doc(doctype="Item", old=candidates[0], new=code,
                                 ignore_permissions=True, show_alert=False,
                                 rebuild_search=False)
                     renamed += 1
                 except Exception:
                     frappe.log_error(frappe.get_traceback(),
-                                     f"SAP item adopt-rename failed: {same_name[0]} -> {code}")
+                                     f"SAP item adopt-rename failed: {candidates[0]} -> {code}")
                 exists = frappe.db.exists("Item", code)
 
         if exists:
@@ -298,9 +354,22 @@ def sync_items():
                 "is_sales_item": 1,
             })
             # set_name pins the docname before autoname can run, so
-            # doc.name == doc.item_code == the SAP code, always
-            doc.insert(ignore_permissions=True, set_name=code)
-            created += 1
+            # doc.name == doc.item_code == the SAP code, always.
+            # A concurrent run that created it a moment ago surfaces as a
+            # duplicate here — treat that as "already synced", never as a
+            # reason to abort the whole run or to write a second record.
+            try:
+                doc.insert(ignore_permissions=True, set_name=code)
+                created += 1
+            except frappe.DuplicateEntryError:
+                frappe.db.rollback()
+                skipped += 1
+                continue
+            except Exception:
+                frappe.db.rollback()
+                frappe.log_error(frappe.get_traceback(), f"SAP item sync failed for {code}")
+                skipped += 1
+                continue
         # auto-map the item's SAP UoM group (cartons/pieces etc.)
         if row.get("UoMGroupEntry") in group_lines:
             try:
@@ -312,8 +381,8 @@ def sync_items():
                 frappe.log_error(frappe.get_traceback(), f"UOM conversion sync failed for {code}")
 
     msg = _("Items synced from SAP: {0} created, {1} updated, {2} renamed to their SAP code, "
-            "{3} UOM conversions mapped, {4} scanned").format(
-        created, updated, renamed, conversions, len(rows))
+            "{3} UOM conversions mapped, {4} skipped, {5} scanned").format(
+        created, updated, renamed, conversions, skipped, len(rows))
     log_sap("Masters", "Success", "Items", message=msg)
     frappe.db.commit()
     return msg
@@ -531,6 +600,13 @@ def sync_sales_persons(client=None):
 
 # ----------------------------------------------------------- customers
 def sync_customers():
+    with single_flight("customers") as lock:
+        if not lock.acquired:
+            return _("A customer sync is already running — try again in a moment.")
+        return _sync_customers()
+
+
+def _sync_customers():
     settings = get_settings()
     client = SAPClient(settings)
     sales_person_map = {}

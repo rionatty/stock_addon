@@ -52,6 +52,33 @@ def integration_enabled(flag=None):
     return True
 
 
+class single_flight:
+    """Stop two runs of the same sync overlapping.
+
+    The hourly scheduler and the manual button live in different worker
+    processes: without this they both pass the "does it exist?" check and
+    both try to create the same master. Used as a context manager —
+    ``acquired`` is False when another run already holds the lock.
+    """
+
+    def __init__(self, key, seconds=600):
+        self.key = f"sap_sync_lock:{key}"
+        self.seconds = seconds
+        self.acquired = False
+
+    def __enter__(self):
+        if frappe.cache().get_value(self.key):
+            return self
+        frappe.cache().set_value(self.key, 1, expires_in_sec=self.seconds)
+        self.acquired = True
+        return self
+
+    def __exit__(self, *exc):
+        if self.acquired:
+            frappe.cache().delete_value(self.key)
+        return False
+
+
 def log_sap(direction, status, endpoint, reference_doctype=None,
             reference_name=None, sap_docentry=None, message=""):
     """Write one SAP Integration Log row. Never raises."""
