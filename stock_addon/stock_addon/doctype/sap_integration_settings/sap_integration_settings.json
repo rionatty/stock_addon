@@ -256,11 +256,10 @@
    "options": "Warehouse"
   },
   {
-   "description": "High-water mark of processed SAP transfers (managed automatically).",
+   "description": "High-water mark of processed SAP transfers. Managed automatically; lower it (or use 'Pull From DocEntry') to re-pull transfers posted before the pull was first switched on. Already-mirrored transfers are skipped, so rewinding cannot duplicate stock.",
    "fieldname": "last_transfer_docentry",
    "fieldtype": "Int",
-   "label": "Last Transfer DocEntry",
-   "read_only": 1
+   "label": "Last Transfer DocEntry"
   },
   {
    "fieldname": "section_mapping",

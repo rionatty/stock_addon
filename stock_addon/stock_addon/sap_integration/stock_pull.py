@@ -246,6 +246,29 @@ def pull_van_transfers(triggered_by="manual"):
         frappe.cache().delete_value("sap_van_pull_running")
 
 
+@frappe.whitelist()
+def pull_from_docentry(docentry):
+    """Re-pull starting at a specific SAP transfer.
+
+    The first pull baselines to SAP's newest transfer so history is not
+    replayed — which also means a transfer posted BEFORE that moment is
+    never seen. This rewinds the mark to just below the given DocEntry
+    and pulls, so a specific transfer (or a short run of them) can be
+    brought in deliberately.
+
+    Transfers already mirrored are skipped on their unique SAP DocEntry
+    stamp, so rewinding cannot double-create stock.
+    """
+    frappe.only_for(("System Manager", "Administrator"))
+    docentry = cint(docentry)
+    if docentry < 1:
+        frappe.throw(_("Enter the SAP DocEntry of the transfer to pull from."))
+    frappe.db.set_single_value("SAP Integration Settings", "last_transfer_docentry", docentry - 1)
+    frappe.db.commit()
+    frappe.clear_cache(doctype="SAP Integration Settings")
+    return pull_van_transfers()
+
+
 def scheduled_pull():
     """Every-5-minutes scheduler job."""
     if not integration_enabled("pull_van_transfers"):

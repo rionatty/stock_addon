@@ -41,6 +41,35 @@ frappe.ui.form.on("SAP Integration Settings", {
 				);
 			}, __("Masters"));
 			frm.add_custom_button(__("Pull Van Transfers"), () => call("pull_transfers_now", "Pulling van transfers from SAP"), __("Transactions"));
+			frm.add_custom_button(__("Pull From DocEntry"), () => {
+				frappe.prompt(
+					{
+						fieldname: "docentry",
+						label: __("SAP Transfer DocEntry"),
+						fieldtype: "Int",
+						reqd: 1,
+						description: __("Pull starts at this transfer. Transfers already mirrored are skipped, so this cannot duplicate stock — but a very low number will scan a lot of history."),
+					},
+					(values) => {
+						frappe.call({
+							method: "stock_addon.stock_addon.doctype.sap_integration_settings.sap_integration_settings.pull_from_docentry_now",
+							args: { docentry: values.docentry },
+							freeze: true,
+							freeze_message: __("Pulling from SAP..."),
+							callback(r) {
+								frappe.msgprint({
+									title: __("Pull From DocEntry"),
+									message: frappe.utils.escape_html(r.message || __("Done")),
+									indicator: "green",
+								});
+								frm.reload_doc();
+							},
+						});
+					},
+					__("Pull From a Specific Transfer"),
+					__("Pull")
+				);
+			}, __("Transactions"));
 			frm.add_custom_button(__("Send Pending to SAP"), () => call("push_pending_now", "Sending pending documents to SAP"), __("Transactions"));
 			frm.add_custom_button(__("Retry Failed Pushes"), () => call("retry_failed_now", "Retrying failed pushes"), __("Transactions"));
 			frm.add_custom_button(__("Sync Monitor"), () => frappe.set_route("query-report", "SAP Sync Monitor"));
