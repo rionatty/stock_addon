@@ -90,6 +90,13 @@ def pull_transfers_now():
 
 
 @frappe.whitelist()
+def preview_transfers_now():
+    _require_manager()
+    from stock_addon.stock_addon.sap_integration.stock_pull import preview_transfers
+    return preview_transfers()
+
+
+@frappe.whitelist()
 def pull_from_docentry_now(docentry):
     _require_manager()
     from stock_addon.stock_addon.sap_integration.stock_pull import pull_from_docentry

@@ -41,6 +41,21 @@ frappe.ui.form.on("SAP Integration Settings", {
 				);
 			}, __("Masters"));
 			frm.add_custom_button(__("Pull Van Transfers"), () => call("pull_transfers_now", "Pulling van transfers from SAP"), __("Transactions"));
+			frm.add_custom_button(__("Preview SAP Transfers"), () => {
+				frappe.call({
+					method: "stock_addon.stock_addon.doctype.sap_integration_settings.sap_integration_settings.preview_transfers_now",
+					freeze: true,
+					freeze_message: __("Reading SAP transfers..."),
+					callback(r) {
+						frappe.msgprint({
+							title: __("Recent SAP Transfers"),
+							message: `<pre style="white-space:pre-wrap">${frappe.utils.escape_html(r.message || "")}</pre>`,
+							indicator: "blue",
+							wide: true,
+						});
+					},
+				});
+			}, __("Transactions"));
 			frm.add_custom_button(__("Pull From DocEntry"), () => {
 				frappe.prompt(
 					{

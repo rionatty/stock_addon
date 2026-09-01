@@ -247,6 +247,60 @@ def pull_van_transfers(triggered_by="manual"):
 
 
 @frappe.whitelist()
+def preview_transfers(limit=10):
+    """Show SAP's most recent stock transfers and whether each would be
+    pulled — without changing anything.
+
+    "checked 0 SAP transfers" only says nothing was newer than the
+    high-water mark; it cannot say what SAP holds or why a given transfer
+    was not matched. This answers both, and gives the DocEntry to feed to
+    'Pull From DocEntry'.
+    """
+    frappe.only_for(("System Manager", "Administrator"))
+    settings = get_settings()
+    client = SAPClient(settings)
+    entity = _transfer_entity(client)
+    if not entity:
+        return _("No stock-transfer entity found on this SAP install.")
+
+    mappings = settings.warehouse_mappings or []
+    van_codes = {m.sap_warehouse_code for m in mappings if cint(m.is_van_warehouse)}
+    mark = cint(settings.last_transfer_docentry)
+
+    rows = client.get_all(entity, params={
+        "$orderby": "DocEntry desc",
+        "$top": cint(limit) or 10,
+    })
+
+    lines = [_("High-water mark is DocEntry {0} — only transfers above it are pulled.").format(mark), ""]
+    for row in rows:
+        entry = cint(row.get("DocEntry"))
+        targets = sorted({
+            (l.get("WarehouseCode") or "?")
+            for l in (row.get("StockTransferLines") or [])
+        })
+        into_van = any(t in van_codes for t in targets)
+        already = frappe.db.exists("Stock Entry", {"custom_sap_docentry": str(entry)})
+
+        if already:
+            verdict = _("already pulled as {0}").format(already)
+        elif not into_van:
+            verdict = _("target not a van warehouse")
+        elif entry <= mark:
+            verdict = _("BELOW the mark — use 'Pull From DocEntry' with {0}").format(entry)
+        else:
+            verdict = _("would be pulled")
+        lines.append(
+            f"DocEntry {entry} (DocNum {row.get('DocNum')}) {str(row.get('DocDate'))[:10]} "
+            f"-> {', '.join(targets) or 'no lines'} : {verdict}"
+        )
+
+    summary = "\n".join(lines)
+    log_sap("Pull", "Success", entity, message=summary[:9000])
+    return summary
+
+
+@frappe.whitelist()
 def pull_from_docentry(docentry):
     """Re-pull starting at a specific SAP transfer.
 
