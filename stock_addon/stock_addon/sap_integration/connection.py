@@ -142,7 +142,10 @@ class SAPClient:
             cookies=self._cookies(),
             headers={"Prefer": "odata.maxpagesize=500"},
             verify=False,
-            timeout=60,
+            # pushes run inside the user's submit — fail fast rather than
+            # hold the form open on an unreachable SAP. Failures are
+            # retryable, so a short timeout costs nothing.
+            timeout=25,
         )
         if resp.status_code == 401 and _retry:
             self.login()

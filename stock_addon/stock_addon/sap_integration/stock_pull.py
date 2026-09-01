@@ -156,11 +156,11 @@ def pull_van_transfers(triggered_by="manual"):
     if not van_codes:
         return _("No van warehouses mapped — tick 'Is Van Warehouse' on at least one mapping row.")
 
-    # single-flight lock: the 5-minute cron and the manual button must not
-    # process the same window concurrently
+    # single-flight lock: the per-minute cron, the manual button and any
+    # on-demand call from the app must not process the same window at once
     if frappe.cache().get_value("sap_van_pull_running"):
         return _("A van stock pull is already running — try again in a minute.")
-    frappe.cache().set_value("sap_van_pull_running", 1, expires_in_sec=240)
+    frappe.cache().set_value("sap_van_pull_running", 1, expires_in_sec=90)
 
     try:
         client = SAPClient(settings)
@@ -236,14 +236,33 @@ def pull_van_transfers(triggered_by="manual"):
         summary = _("Van stock pull: {0} pulled, {1} skipped, {2} failed (checked {3} SAP transfers)").format(
             pulled, skipped, failed, len(transfers)
         )
-        # manual runs always leave a visible trace; the 5-minute cron only
-        # logs when something actually happened
+        # manual runs always leave a visible trace; the scheduled and
+        # on-demand runs only log when something actually happened, or the
+        # log would gain a row every minute
         if triggered_by == "manual" or pulled or failed:
             log_sap("Pull", "Failed" if failed else "Success",
                     entity, message=summary)
         return summary
     finally:
         frappe.cache().delete_value("sap_van_pull_running")
+
+
+@frappe.whitelist()
+def pull_now():
+    """On-demand pull, for the Sales Pro app to call before it shows van
+    stock (POST /api/method/....stock_pull.pull_now).
+
+    The scheduler already runs every minute; this removes even that wait
+    for the one moment freshness actually matters — the rep opening their
+    van. Any signed-in user may call it: it takes no input, the
+    single-flight lock stops repeated taps stampeding SAP, and a caller
+    who is already up to date simply gets "nothing new".
+    """
+    if frappe.session.user in ("Guest", None):
+        raise frappe.PermissionError
+    if not integration_enabled("pull_van_transfers"):
+        return {"ok": False, "message": _("Van stock pull is switched off.")}
+    return {"ok": True, "message": pull_van_transfers(triggered_by="on-demand")}
 
 
 @frappe.whitelist()

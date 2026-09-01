@@ -352,8 +352,11 @@ doc_events = {
 # "Enable SAP Integration" master switch + their own feature toggles).
 scheduler_events = {
     "cron": {
-        # every 5 minutes: mirror SAP van-warehouse transfers into ERPNext
-        "*/5 * * * *": [
+        # every minute: mirror SAP van-warehouse transfers into ERPNext.
+        # A run that finds nothing is one cheap filtered GET, and the
+        # single-flight lock stops runs overlapping, so this is the
+        # tightest loop the scheduler allows.
+        "* * * * *": [
             "stock_addon.stock_addon.sap_integration.stock_pull.scheduled_pull",
         ],
         # hourly: re-sync items + customers (only if auto-sync is on)
