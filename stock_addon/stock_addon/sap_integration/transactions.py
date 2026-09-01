@@ -41,6 +41,16 @@ def _wh_map():
 
 
 def _sap_warehouse(erp_warehouse, required=False, context=""):
+    if not erp_warehouse:
+        if required:
+            # distinct from "mapped but unknown" — the document simply
+            # never named one, so no mapping table entry could help
+            raise SAPError(
+                f"No {context} warehouse on this document. ERPNext allows a Material "
+                "Transfer request without one, but SAP requires it — set it on the "
+                "request, or set a Default Source Warehouse in SAP Integration Settings."
+            )
+        return None
     code = _wh_map().get(erp_warehouse)
     if required and not code:
         raise SAPError(
@@ -248,9 +258,13 @@ def on_sales_invoice_submit(doc, method=None):
 
 # ---------------------------------------------------- transfer request
 def push_material_request_doc(doc):
+    # ERPNext lets a Material Transfer request leave the source blank (it
+    # is picked at Stock Entry time); SAP will not. Fall back to the
+    # configured default so desk-created requests still reach SAP.
+    default_source = get_settings().get("default_source_warehouse")
     lines = []
     for item in doc.items:
-        from_wh = item.get("from_warehouse") or doc.get("set_from_warehouse")
+        from_wh = item.get("from_warehouse") or doc.get("set_from_warehouse") or default_source
         to_wh = item.get("warehouse") or doc.get("set_warehouse")
         lines.append({
             "ItemCode": item.item_code,

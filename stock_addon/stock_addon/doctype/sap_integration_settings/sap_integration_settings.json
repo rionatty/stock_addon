@@ -249,7 +249,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "depends_on": "eval:doc.receipt_mode=='Material Transfer'",
+   "description": "Used in both directions when a document does not name a source: the warehouse van stock is transferred FROM when pushing a stock request to SAP, and the source for pulled transfers in Material Transfer mode. Must also appear in the Warehouse Mapping below.",
    "fieldname": "default_source_warehouse",
    "fieldtype": "Link",
    "label": "Default Source Warehouse",
