@@ -1,0 +1,833 @@
+/* ============================================================
+   Stock Addon — SAP Business One navy desk theme
+   (ported 1:1 from rionatty/Agricalt branch `twiga`)
+   Loaded app-wide via app_include_css = "stock_addon.bundle.css".
+
+   THREE RULES, each learned the hard way:
+
+   1. This file must stay SELF-CONTAINED. esbuild silently drops
+      @import here (see 449ec9d), so the theme is inlined, not
+      imported. Do not split it out.
+
+   2. Define EVERY custom property you reference. A declaration
+      that references an undefined var() is silently discarded by
+      the browser and the rule renders as nothing — no error, no
+      warning. Verify with:
+        grep -o 'var(--[a-z-]*)' this-file | sort -u
+      and check each one appears in :root.
+
+   3. Do NOT set a background or layout on child-table grid
+      headers. It broke every child table on v16 twice already
+      (81015b8, 5ac19bb). Text colour only. The list-row-head
+      below IS safe to background — that one is proven.
+
+   Heavy background overrides stay scoped to light mode with
+   html:not([data-theme="dark"]) so dark mode survives.
+   ============================================================ */
+
+/* ── Palette — SAP Business One ─────────────────────────────── */
+:root {
+  /* Chrome: window title bar, headers */
+  --agri-primary:        #14395E;   /* main navy — primary          */
+  --agri-primary-dark:   #0A2540;   /* darkest navy — title bars    */
+  --agri-primary-mid:    #2A5A8C;   /* steel blue — section heads   */
+  --agri-primary-light:  #3B78B5;   /* accent blue — borders/hover  */
+  --agri-primary-soft:   #5B8FC7;   /* soft blue — decorative only  */
+
+  /* Surfaces */
+  --agri-pale:           #EEF3F9;   /* pale blue wash — zebra rows  */
+  --agri-wash:           #F5F8FC;   /* faint page canvas            */
+  --agri-border:         #C3D0E0;   /* blue-grey hairline           */
+  --agri-border-strong:  #7E93AD;   /* control outlines             */
+  --agri-readonly:       #EDF1F7;   /* read-only field tint         */
+  --agri-selected:       #D6E4F7;   /* selected row                 */
+
+  /* Interactive */
+  --agri-accent:         #0A6ED1;   /* SAP Fiori blue — focus ring  */
+  --agri-link:           #0B5CAD;   /* hyperlink text               */
+
+  /* Text */
+  --agri-ink:            #1A2733;   /* body text                    */
+  --agri-ink-muted:      #546678;   /* labels, placeholders         */
+
+  /* Status */
+  --agri-amber-text:     #B45309;   /* warning text — legible amber */
+  --agri-danger:         #A62B25;   /* error / overdue              */
+  --agri-success:        #256F3A;   /* success status only          */
+
+  /* Shell — sidebar + navbar. Lighter than the chrome navy on purpose:
+     a near-black slab down the left edge reads as heavy. Contrast with
+     --agri-shell-text is 6.6:1, with --agri-shell-muted 4.5:1. */
+  --agri-shell:          #3A5F86;   /* sidebar base — soft steel blue */
+  --agri-shell-dark:     #33547A;   /* navbar — a step down for depth */
+  --agri-shell-text:     #EAF1FA;   /* labels on the shell            */
+  --agri-shell-muted:    #C5D6EC;   /* section captions on the shell  */
+  --agri-shell-marker:   #F0AB00;   /* selected-item gold highlight   */
+  --agri-shell-marker-deep: #B37D00;/* its darker edge                */
+
+  /* Geometry — B1 is dense and square, not rounded */
+  --agri-radius:         4px;
+  --agri-radius-sm:      3px;
+  --agri-shadow:         0 1px 3px rgba(10,37,64,.14);
+  --agri-shadow-lg:      0 6px 16px rgba(10,37,64,.22);
+}
+
+/* Global accent for native controls (checkbox / radio / range) */
+input[type="checkbox"], input[type="radio"] { accent-color: var(--agri-accent); }
+
+/* Themed scrollbars */
+* { scrollbar-color: var(--agri-primary-soft) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--agri-border); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--agri-primary-soft); }
+
+/* ── Primary / main action buttons ──────────────────────────── */
+.agri-btn-main,
+.agri-btn-main:focus,
+.btn-success.agri-btn-main {
+  background: var(--agri-primary) !important;
+  border: 1px solid var(--agri-primary-dark) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  border-radius: var(--agri-radius-sm) !important;
+  letter-spacing: .2px;
+  box-shadow: 0 1px 3px rgba(10,37,64,.30) !important;
+  transition: background .15s ease, box-shadow .15s ease !important;
+}
+.agri-btn-main:hover,
+.btn-success.agri-btn-main:hover {
+  background: var(--agri-primary-mid) !important;
+  box-shadow: 0 3px 8px rgba(10,37,64,.40) !important;
+}
+
+/* Standard primary actions: Save, list "Add", modal primary */
+.btn-primary,
+.primary-action,
+.page-actions .btn-primary,
+.standard-actions .btn-primary,
+.modal .btn-modal-primary,
+.btn-modal-primary {
+  background: var(--agri-primary) !important;
+  border: 1px solid var(--agri-primary-dark) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  border-radius: var(--agri-radius-sm) !important;
+  box-shadow: 0 1px 3px rgba(10,37,64,.25) !important;
+  transition: background .15s ease, box-shadow .15s ease !important;
+}
+.btn-primary:hover,
+.primary-action:hover,
+.btn-modal-primary:hover {
+  background: var(--agri-primary-mid) !important;
+  box-shadow: 0 3px 8px rgba(10,37,64,.35) !important;
+}
+
+/* Secondary / default buttons get a quiet blue tint */
+.btn-default:not(.grid-add-row):hover {
+  border-color: var(--agri-primary-light) !important;
+  color: var(--agri-primary) !important;
+}
+
+/* ── Page header banner ─────────────────────────────────────────
+   Deliberately LIGHT, not navy. The shell bar above it is already
+   dark; stacking a second dark band reads as heavy, and Fiori's
+   own object-page header is a light bar under a dark shell. It
+   also sidesteps the failure mode that bit the sidebar — painting
+   a container dark and missing a descendant that keeps dark text.
+   Weight comes from the navy title and the accent rule beneath.
+   ─────────────────────────────────────────────────────────────── */
+html:not([data-theme="dark"]) .page-head {
+  background: #FFFFFF !important;
+  border-bottom: 2px solid var(--agri-primary-mid) !important;
+  box-shadow: 0 1px 4px rgba(10,37,64,.10) !important;
+}
+html:not([data-theme="dark"]) .page-head .page-title .title-text,
+html:not([data-theme="dark"]) .page-head .title-text {
+  color: var(--agri-primary) !important;
+  font-weight: 700 !important;
+}
+html:not([data-theme="dark"]) .page-head .breadcrumb-container a,
+html:not([data-theme="dark"]) .page-head .breadcrumb-container .breadcrumb-item,
+html:not([data-theme="dark"]) .page-head .breadcrumb-container {
+  color: var(--agri-ink-muted) !important;
+}
+html:not([data-theme="dark"]) .page-head .breadcrumb-container a:hover {
+  color: var(--agri-link) !important;
+}
+
+/* ── Form layout: section cards ─────────────────────────────── */
+html:not([data-theme="dark"]) .form-page,
+html:not([data-theme="dark"]) .layout-main-section {
+  background: var(--agri-wash) !important;
+}
+
+.form-section {
+  border: 1px solid var(--agri-border) !important;
+  border-radius: var(--agri-radius) !important;
+  padding: 14px 16px 8px !important;
+  margin-bottom: 14px !important;
+  background: #fff !important;
+  box-shadow: var(--agri-shadow) !important;
+}
+/* Section heads as filled title bars — B1 labels every block of a form
+   this way, and it gives collapsed sections an obvious hit area. */
+.form-section .section-head,
+.form-section > .section-head {
+  color: var(--agri-primary) !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  background: linear-gradient(90deg, var(--agri-pale), transparent) !important;
+  border-left: 3px solid var(--agri-primary-mid) !important;
+  padding: 6px 10px 6px 9px !important;
+  border-radius: 0 var(--agri-radius-sm) var(--agri-radius-sm) 0;
+  margin-bottom: 8px;
+}
+.form-section .section-head:hover { background: var(--agri-pale) !important; }
+/* Unlabelled sections must not render as a stray empty title bar. */
+.form-section .section-head:empty { display: none !important; }
+
+/* ── Tab strip ──────────────────────────────────────────────── */
+.form-tabs .nav-tabs .nav-link {
+  font-weight: 600 !important;
+  color: var(--agri-ink-muted) !important;
+}
+.form-tabs .nav-tabs .nav-link.active {
+  color: var(--agri-primary) !important;
+  border-bottom: 3px solid var(--agri-accent) !important;
+  font-weight: 700 !important;
+}
+.form-tabs .nav-tabs .nav-link:hover { color: var(--agri-primary-mid) !important; }
+
+/* ── Inputs: editable vs locked ─────────────────────────────────
+   The biggest readability problem on stock Frappe forms: every
+   input is painted the same grey, so a field you can type in and
+   one you cannot look identical. B1's convention — and the reason
+   its dense forms stay usable — is white means editable, grey
+   means locked. The two rules below are the whole point of this
+   section; keep them adjacent and keep the locked one SECOND so
+   it wins at equal specificity.
+   ─────────────────────────────────────────────────────────────── */
+
+/* Editable */
+html:not([data-theme="dark"]) .form-control,
+html:not([data-theme="dark"]) .input-with-feedback,
+html:not([data-theme="dark"]) select.form-control,
+html:not([data-theme="dark"]) textarea.form-control,
+html:not([data-theme="dark"]) .awesomplete input {
+  background-color: #FFFFFF !important;
+  border: 1px solid var(--agri-border-strong) !important;
+  border-radius: var(--agri-radius-sm) !important;
+  transition: border-color .15s ease, box-shadow .15s ease !important;
+}
+
+/* Locked */
+html:not([data-theme="dark"]) .form-control[readonly]:not([disabled]),
+html:not([data-theme="dark"]) .form-control[disabled],
+html:not([data-theme="dark"]) .control-input.read-only-input,
+html:not([data-theme="dark"]) .like-disabled-input,
+html:not([data-theme="dark"]) .like-disabled-input.read-only-value {
+  background-color: var(--agri-readonly) !important;
+  border: 1px solid var(--agri-border) !important;
+  color: var(--agri-ink-muted) !important;
+  cursor: default;
+}
+
+.form-control:focus,
+.input-with-feedback:focus {
+  border-color: var(--agri-accent) !important;
+  box-shadow: 0 0 0 3px rgba(10,110,209,.18) !important;
+}
+
+/* Field labels — small and quiet so the values carry the eye */
+.control-label {
+  color: var(--agri-ink-muted) !important;
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+  letter-spacing: .2px;
+  margin-bottom: 3px !important;
+}
+/* Mandatory star */
+.reqd .label-area::after,
+.reqd.control-label::after { color: var(--agri-danger) !important; }
+
+/* ── Child table (grid) header ──
+   RULE 3: text colour ONLY. No background, no layout overrides —
+   setting either one broke every child table on v16 (81015b8).
+   Dark navy bold labels are legible on the default light header. */
+.form-grid .grid-heading-row,
+.form-grid .grid-heading-row *,
+.form-grid [class*="heading"],
+.form-grid [class*="heading"] * {
+  color: var(--agri-primary-dark) !important;
+  font-weight: 600 !important;
+}
+.form-grid {
+  border: 1px solid var(--agri-border) !important;
+  border-radius: var(--agri-radius-sm) !important;
+  overflow: hidden;
+}
+.grid-body .rows .grid-row:nth-child(even) .data-row { background: var(--agri-pale) !important; }
+.grid-body .rows .grid-row:hover .data-row { background: var(--agri-selected) !important; }
+.btn.grid-add-row,
+.grid-footer .btn-xs {
+  background: var(--agri-pale) !important;
+  color: var(--agri-link) !important;
+  border: 1px dashed var(--agri-border-strong) !important;
+  font-weight: 600 !important;
+  border-radius: var(--agri-radius-sm) !important;
+}
+.btn.grid-add-row:hover { background: var(--agri-selected) !important; }
+
+/* ── List view ──────────────────────────────────────────────── */
+.list-row-container { border-radius: var(--agri-radius-sm); transition: background .12s ease; }
+html:not([data-theme="dark"]) .list-row-container:hover {
+  background: var(--agri-pale) !important;
+}
+/* List header — light background AND dark text set together so the
+   column labels stay legible (v16 rendered this dark-on-dark). This
+   one IS safe to background; the child-table grid header is not. */
+.list-row-head {
+  background-color: #DCE4EF !important;
+  border-bottom: 2px solid var(--agri-border-strong) !important;
+}
+.list-row-head,
+.list-row-head *,
+.list-row-head .list-row-col,
+.list-row-head .list-subject {
+  color: var(--agri-ink) !important;
+  font-weight: 600 !important;
+}
+.list-row-col.list-subject .level-item { font-weight: 600; }
+.list-row .list-subject a:hover { color: var(--agri-accent) !important; }
+/* Filter / sort pills — squared off, B1 style */
+.filter-button.btn, .sort-selector .btn { border-radius: var(--agri-radius) !important; }
+
+/* ── Status badges / indicators ─────────────────────────────── */
+.indicator-pill { font-weight: 600 !important; border-radius: var(--agri-radius) !important; }
+.indicator-pill.gray, .indicator-pill.grey,
+.indicator-pill[data-color="gray"], .indicator-pill[data-color="grey"] {
+  background: #EEF1F4 !important; color: var(--agri-ink-muted) !important;
+}
+.indicator-pill.green, .indicator-pill[data-color="green"] {
+  background: #E3F1E7 !important;
+  color: var(--agri-success) !important;
+  border: 1px solid #BFDCC8 !important;
+}
+.indicator-pill.blue, .indicator-pill[data-color="blue"],
+.indicator-pill.cyan, .indicator-pill[data-color="cyan"] {
+  background: var(--agri-pale) !important;
+  color: var(--agri-primary) !important;
+  border: 1px solid var(--agri-border) !important;
+}
+.indicator-pill.orange, .indicator-pill[data-color="orange"],
+.indicator-pill.yellow, .indicator-pill[data-color="yellow"] {
+  background: #FDF2DC !important; color: var(--agri-amber-text) !important;
+}
+.indicator-pill.red, .indicator-pill[data-color="red"] {
+  background: #FBEAE9 !important; color: var(--agri-danger) !important;
+}
+.indicator-pill.purple, .indicator-pill[data-color="purple"] {
+  background: #EFE7F6 !important; color: #5B3A8E !important;
+}
+
+/* ── Workspace: number cards ────────────────────────────────── */
+.widget.number-widget-box {
+  border: 1px solid var(--agri-border) !important;
+  border-top: 3px solid var(--agri-primary-mid) !important;
+  border-radius: var(--agri-radius) !important;
+  box-shadow: var(--agri-shadow) !important;
+  transition: transform .15s ease, box-shadow .15s ease !important;
+}
+.widget.number-widget-box:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--agri-shadow-lg) !important;
+}
+.widget.number-widget-box .widget-head .widget-label .widget-title {
+  color: var(--agri-ink-muted) !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  font-size: 11.5px !important;
+}
+.widget.number-widget-box .number-card-number,
+.widget.number-widget-box .widget-content .number {
+  color: var(--agri-primary) !important;
+  font-weight: 800 !important;
+}
+
+/* ── Workspace: section headers ─────────────────────────────── */
+.widget.section-widget .section-header,
+.ce-block .widget-group-title,
+.widget-group .widget-group-head {
+  background: linear-gradient(90deg, var(--agri-pale), transparent) !important;
+  border-left: 3px solid var(--agri-primary-mid) !important;
+  border-radius: var(--agri-radius-sm) !important;
+  padding: 6px 12px !important;
+}
+.widget.section-widget .section-header .section-title,
+.widget-group-title { color: var(--agri-primary) !important; font-weight: 700 !important; }
+
+/* ── Workspace: shortcut + links cards ──────────────────────── */
+.widget.shortcut-widget-box,
+.widget.links-widget-box,
+.widget.chart-widget-box {
+  border: 1px solid var(--agri-border) !important;
+  border-radius: var(--agri-radius) !important;
+  box-shadow: var(--agri-shadow) !important;
+  transition: transform .15s ease, box-shadow .15s ease !important;
+}
+.widget.shortcut-widget-box:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: var(--agri-shadow-lg) !important;
+  border-color: var(--agri-primary-light) !important;
+}
+.widget.shortcut-widget-box .widget-head .widget-label,
+.widget.links-widget-box .widget-head .widget-label .widget-title {
+  color: var(--agri-primary) !important;
+  font-weight: 700 !important;
+}
+.widget.links-widget-box .widget-head .widget-label .widget-title {
+  text-transform: uppercase; letter-spacing: .5px; font-size: 12px !important;
+}
+.link-item:hover { background: var(--agri-pale) !important; border-radius: var(--agri-radius-sm) !important; }
+.link-item .link-content,
+.widget .link-item a { color: var(--agri-link) !important; }
+.link-item a:hover { color: var(--agri-accent) !important; }
+
+/* ── Sidebar / workspace nav ────────────────────────────────── */
+.sidebar-item.active > .sidebar-item-label,
+.standard-sidebar-item.selected .sidebar-item-label {
+  color: var(--agri-primary) !important; font-weight: 700 !important;
+}
+.standard-sidebar-item.selected {
+  background: var(--agri-selected) !important;
+  border-left: 3px solid var(--agri-primary) !important;
+  border-radius: var(--agri-radius-sm);
+}
+.sidebar-item:hover > .sidebar-item-label { color: var(--agri-primary-mid) !important; }
+
+/* ── Form dashboard headline (counts/connections) ───────────── */
+.form-dashboard .form-dashboard-section { border-radius: var(--agri-radius-sm) !important; }
+.form-dashboard-section .section-head { color: var(--agri-primary) !important; }
+
+/* ── Alerts / msgprint ──────────────────────────────────────── */
+.msgprint .msgprint-content { border-left: 4px solid var(--agri-primary-mid) !important; }
+.desk-alert .alert-message-container { border-left: 4px solid var(--agri-primary-mid); }
+
+/* ── Misc polish ────────────────────────────────────────────── */
+.navbar .navbar-home img { filter: drop-shadow(0 0 4px rgba(59,120,181,.5)); }
+a { color: var(--agri-link); }
+a:hover { color: var(--agri-accent); }
+
+/* ============================================================
+   FORM DENSITY
+   ------------------------------------------------------------
+   Field-state colouring lives up in the Inputs section. This
+   block is purely vertical rhythm: B1 fits roughly a third more
+   on a screen than stock Frappe, and most of that difference is
+   section and control padding rather than font size.
+   ============================================================ */
+.form-section {
+  padding: 12px 14px 6px !important;
+  margin-bottom: 10px !important;
+}
+.form-column .frappe-control { margin-bottom: 9px !important; }
+.form-section .section-body { padding-top: 2px !important; }
+
+/* Grid rows: shave the padding, keep the hit area usable. */
+.grid-body .rows .grid-row .data-row .col {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+.grid-body .rows .grid-row .data-row { min-height: 0 !important; }
+
+/* Checkbox rows read as one unit rather than floating text. */
+.frappe-control[data-fieldtype="Check"] .checkbox .label-area {
+  font-weight: 500 !important;
+  color: var(--agri-ink) !important;
+}
+
+/* ============================================================
+   B1 SHELL — dark navy sidebar + navbar
+   ------------------------------------------------------------
+   This is the block that makes it read as Business One rather
+   than Fiori: B1's signature is the dark module sidebar.
+
+   RULE 3 applies with force here. Forcing a dark background is
+   only safe if EVERY descendant's text and icon colour is set
+   too, or you get the dark-on-dark that bit us on list headers
+   (5ac19bb). Hence the deliberately broad descendant selectors
+   and the --icon-stroke / --icon-fill overrides — Frappe draws
+   sidebar icons as <svg><use>, which ignores `color`.
+
+   Scoped to light mode: dark mode is already dark.
+   To revert, delete this block. Nothing else depends on it.
+   ============================================================ */
+html:not([data-theme="dark"]) .body-sidebar,
+html:not([data-theme="dark"]) .body-sidebar-container,
+html:not([data-theme="dark"]) .desk-sidebar {
+  background: var(--agri-shell) !important;
+  border-right: 1px solid var(--agri-shell-dark) !important;
+}
+
+/* Neutralise light panel backgrounds Frappe paints INSIDE the sidebar —
+   the workspace-switcher block, the search row, the user footer. Those
+   panels kept their own pale background while the text around them went
+   light, which is the dark-on-dark you saw. Interactive states and
+   dropdowns get their backgrounds restored below, on higher specificity. */
+html:not([data-theme="dark"]) .body-sidebar-container * {
+  background-color: transparent !important;
+}
+
+/* Text: the container, not just .body-sidebar. Missing the container was
+   the bug — its direct children got the navy fill but never the light ink. */
+html:not([data-theme="dark"]) .body-sidebar-container,
+html:not([data-theme="dark"]) .body-sidebar-container *,
+html:not([data-theme="dark"]) .body-sidebar,
+html:not([data-theme="dark"]) .body-sidebar *,
+html:not([data-theme="dark"]) .desk-sidebar,
+html:not([data-theme="dark"]) .desk-sidebar * {
+  color: var(--agri-shell-text) !important;
+  border-color: rgba(255,255,255,.12) !important;
+}
+
+/* Icons are <use> elements — `color` does nothing, these vars do. */
+html:not([data-theme="dark"]) .body-sidebar-container,
+html:not([data-theme="dark"]) .body-sidebar,
+html:not([data-theme="dark"]) .desk-sidebar {
+  --icon-stroke: var(--agri-shell-text);
+  --icon-fill: transparent;
+}
+html:not([data-theme="dark"]) .body-sidebar-container .icon use,
+html:not([data-theme="dark"]) .desk-sidebar .icon use {
+  stroke: var(--agri-shell-text) !important;
+}
+
+/* Section captions sit back; item labels come forward. */
+html:not([data-theme="dark"]) .body-sidebar-container .standard-sidebar-label,
+html:not([data-theme="dark"]) .body-sidebar-container .sidebar-group-title,
+html:not([data-theme="dark"]) .body-sidebar-container .text-muted,
+html:not([data-theme="dark"]) .body-sidebar-container small {
+  color: var(--agri-shell-muted) !important;
+  letter-spacing: .4px;
+}
+
+/* Hover + selected — the amber marker bar is straight off B1. */
+html:not([data-theme="dark"]) .body-sidebar-container .standard-sidebar-item:hover,
+html:not([data-theme="dark"]) .body-sidebar-container .sidebar-item-container:hover {
+  background-color: rgba(255,255,255,.10) !important;
+  border-radius: var(--agri-radius-sm);
+}
+/* Selected item is a solid gold highlighter with navy ink.
+   Solid, not translucent, on purpose: gold at any alpha over the navy
+   shell composites to olive (#F0AB00 @ 22% lands on #627069), which
+   reads as dirty green rather than gold. Solid keeps the colour and
+   buys far better contrast too — navy on gold is 7.79:1, where white
+   on the old translucent fill was 5.20:1. */
+html:not([data-theme="dark"]) .body-sidebar-container .standard-sidebar-item.selected,
+html:not([data-theme="dark"]) .body-sidebar-container .sidebar-item-container.selected {
+  background-color: var(--agri-shell-marker) !important;
+  border-left: 3px solid var(--agri-shell-marker-deep) !important;
+  border-radius: 0 var(--agri-radius-sm) var(--agri-radius-sm) 0;
+}
+/* Overrides the shell-wide light-ink rule, which would otherwise leave
+   near-white text on gold at 1.9:1. */
+html:not([data-theme="dark"]) .body-sidebar-container .standard-sidebar-item.selected,
+html:not([data-theme="dark"]) .body-sidebar-container .standard-sidebar-item.selected *,
+html:not([data-theme="dark"]) .body-sidebar-container .sidebar-item-container.selected,
+html:not([data-theme="dark"]) .body-sidebar-container .sidebar-item-container.selected * {
+  color: var(--agri-primary-dark) !important;   /* 7.79:1 on gold */
+  font-weight: 700 !important;
+}
+/* Icons are <use> elements — `color` never reaches them, so the stroke
+   has to be flipped separately or the selected row keeps pale icons. */
+html:not([data-theme="dark"]) .body-sidebar-container .standard-sidebar-item.selected,
+html:not([data-theme="dark"]) .body-sidebar-container .sidebar-item-container.selected {
+  --icon-stroke: var(--agri-primary-dark);
+  --icon-fill: transparent;
+}
+html:not([data-theme="dark"]) .body-sidebar-container .standard-sidebar-item.selected .icon use,
+html:not([data-theme="dark"]) .body-sidebar-container .sidebar-item-container.selected .icon use {
+  stroke: var(--agri-primary-dark) !important;
+}
+
+/* Search / inputs inside the shell */
+html:not([data-theme="dark"]) .body-sidebar-container input,
+html:not([data-theme="dark"]) .body-sidebar-container .form-control {
+  background-color: rgba(255,255,255,.12) !important;
+  border: 1px solid rgba(255,255,255,.22) !important;
+  color: #FFFFFF !important;
+}
+html:not([data-theme="dark"]) .body-sidebar-container input::placeholder {
+  color: var(--agri-shell-muted) !important;
+}
+
+/* Keyboard focus must stay visible against the shell. */
+html:not([data-theme="dark"]) .body-sidebar-container a:focus-visible,
+html:not([data-theme="dark"]) .body-sidebar-container button:focus-visible {
+  outline: 2px solid #7FB3F0 !important;
+  outline-offset: 1px;
+}
+
+/* Dropdowns opened FROM the sidebar (workspace switcher, user menu)
+   render as white panels — send their ink back to dark or they inherit
+   the light-on-dark above and vanish. Higher specificity than the
+   blanket transparent rule, so their background survives. */
+html:not([data-theme="dark"]) .body-sidebar-container .dropdown-menu,
+html:not([data-theme="dark"]) .body-sidebar-container .dropdown-menu * {
+  color: var(--agri-ink) !important;
+  --icon-stroke: var(--agri-ink);
+}
+html:not([data-theme="dark"]) .body-sidebar-container .dropdown-menu {
+  background-color: #FFFFFF !important;
+  border: 1px solid var(--agri-border) !important;
+}
+html:not([data-theme="dark"]) .body-sidebar-container .dropdown-menu .icon use {
+  stroke: var(--agri-ink) !important;
+}
+
+/* Top navbar — the B1 window title bar. */
+html:not([data-theme="dark"]) .navbar {
+  background: var(--agri-shell-dark) !important;
+  border-bottom: 1px solid rgba(255,255,255,.12) !important;
+}
+html:not([data-theme="dark"]) .navbar .nav-link,
+html:not([data-theme="dark"]) .navbar .navbar-brand,
+html:not([data-theme="dark"]) .navbar .dropdown-toggle {
+  color: var(--agri-shell-text) !important;
+}
+html:not([data-theme="dark"]) .navbar { --icon-stroke: var(--agri-shell-text); }
+html:not([data-theme="dark"]) .navbar .icon use { stroke: var(--agri-shell-text) !important; }
+/* Same reset for navbar dropdowns. */
+html:not([data-theme="dark"]) .navbar .dropdown-menu,
+html:not([data-theme="dark"]) .navbar .dropdown-menu * {
+  color: var(--agri-ink) !important;
+  --icon-stroke: var(--agri-ink);
+}
+html:not([data-theme="dark"]) .navbar .dropdown-menu {
+  background-color: #FFFFFF !important;
+  border: 1px solid var(--agri-border) !important;
+}
+html:not([data-theme="dark"]) .navbar .dropdown-menu .icon use {
+  stroke: var(--agri-ink) !important;
+}
+
+/* Subtle leaf watermark on the form canvas — the one nod to agriculture */
+.form-page::before {
+  content: "🌱";
+  position: fixed;
+  bottom: 22px;
+  right: 26px;
+  font-size: 60px;
+  opacity: .04;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ============================================================
+   B1 COCKPIT — navy workspace canvas, white floating tiles
+   ------------------------------------------------------------
+   Second self-contained, deletable block. To revert the landing
+   page, delete from here to EOF. Nothing above depends on it.
+
+   Everything here was checked against the real frappe v16 source
+   (frappe/public/scss/desk/desktop.scss + page.scss). Four facts
+   drove the shape of this block:
+
+   a) SCOPE. Frappe nests its entire workspace stylesheet inside a
+      bare [data-page-route="Workspaces"]. Reusing that hook scopes
+      the navy to the landing page AND raises specificity above the
+      .layout-main-section wash set earlier in this file, which is
+      !important and would otherwise win.
+
+   b) NEVER override --fg-color to darken the canvas. In light mode
+      --card-bg is an ALIAS of --fg-color, so darkening it turns the
+      cards navy too, and every card title and KPI figure (all
+      #14395E) goes navy-on-navy. Paint the container, force the
+      cards white.
+
+   c) NEVER use bare .widget for the white card. EditorJS text
+      blocks and spacers also carry it — paragraph.js does
+      classList.add(wrapper, block, "widget") and spacer.js does
+      classList.add("widget", "spacer"). Bare .widget paints white
+      plates behind headings and spacers. Enumerate the real card
+      variants instead. Note the chart card is dashboard-widget-box,
+      NOT chart-widget-box; the rule earlier in this file that names
+      chart-widget-box has never matched anything.
+
+   d) Workspace section headings are .ce-header .h4/.h5, which
+      hard-set their own colour. The .widget-group-title rule
+      earlier in this file belongs to dashboards and the loading
+      skeleton — on a workspace it matches nothing.
+
+   Every foreground/background pair below was checked with WCAG 2.x
+   relative luminance. Body text clears 4.5:1, graphics clear 3:1.
+   ============================================================ */
+
+:root {
+  /* Canvas gradient, read off the B1 cockpit: darker at top-left. */
+  --agri-canvas-top: #1D3D5C;
+  --agri-canvas-bottom: #2C5175;
+  /* Hairline that reads on navy without becoming a stripe. */
+  --agri-canvas-rule: rgba(255,255,255,.16);
+  /* Chart bar. The reference sky blue (#5BC8F5) is only 1.90:1 on a
+     white card — below the 3:1 a graphical object needs — so this is
+     the nearest blue that clears it (3.04:1). */
+  --agri-chart-bar: #4A9BD1;
+}
+
+/* ── The canvas ─────────────────────────────────────────────── */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .layout-main-section {
+  background: linear-gradient(160deg, var(--agri-canvas-top), var(--agri-canvas-bottom)) !important;
+  border: none !important;
+}
+/* The editor mount is min-height:calc(100vh - 165px); leaving these
+   transparent lets the gradient show through the full height. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .editor-js-container,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] #editorjs,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .codex-editor,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .codex-editor__redactor,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .ce-block,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .ce-block__content {
+  background: transparent !important;
+}
+
+/* ── Title bar joins the canvas ─────────────────────────────── */
+/* Deliberately separate from the global .page-head rule above: that
+   one keeps forms light, this one only fires on workspaces. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .page-head,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .page-head-content {
+  background: var(--agri-canvas-top) !important;
+  border-bottom: 1px solid var(--agri-canvas-rule) !important;
+  box-shadow: none !important;
+}
+/* The workspace name renders as a BREADCRUMB in v16, not .title-text.
+   Note frappe misspells the class 'worksapce' — spelling it correctly
+   gives dead CSS. Both spellings listed so this survives an upstream fix. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .page-head .title-text,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .page-head .title-area,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .navbar-breadcrumbs,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .navbar-breadcrumbs li,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .navbar-breadcrumbs a,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .navbar-breadcrumbs a.worksapce-breadcrumb,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .navbar-breadcrumbs a.workspace-breadcrumb {
+  color: var(--agri-shell-text) !important;
+}
+/* Frappe draws these as <svg><use>, which ignores `color` entirely —
+   only --icon-stroke/--icon-fill reach them. Same trap as the sidebar. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .page-head {
+  --icon-stroke: var(--agri-shell-text);
+  --icon-fill: none;
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .page-head .btn:not(.btn-primary) {
+  background: rgba(255,255,255,.14) !important;
+  border: 1px solid rgba(255,255,255,.45) !important;
+  color: var(--agri-shell-text) !important;
+}
+
+/* ── Section headings sit ON the canvas, not in a card ──────── */
+/* .h4/.h5 hard-set color: var(--text-light) on themselves, so this
+   needs !important. Without it the headings are dark-on-navy — the
+   exact bug that shipped on the sidebar. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .ce-header,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .ce-header .h4,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .ce-header .h5,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .ce-paragraph,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .ce-block__content > p {
+  color: var(--agri-shell-text) !important;
+  background: transparent !important;
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .ce-header .h4 {
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  font-weight: 700 !important;
+  border-bottom: 1px solid var(--agri-canvas-rule);
+  padding-bottom: 6px;
+}
+
+/* ── The tiles ──────────────────────────────────────────────── */
+/* Enumerated, never bare .widget — see (c) in the header above.
+   links-widget-box and onboarding-widget-box force-paint themselves
+   var(--bg-color) rather than --card-bg, so they need the override
+   just as much as the others do. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.number-widget-box,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.shortcut-widget-box,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.links-widget-box,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.dashboard-widget-box,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.quick-list-widget-box,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.onboarding-widget-box {
+  background-color: #FFFFFF !important;
+  border: none !important;
+  border-radius: var(--agri-radius) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.28) !important;
+}
+/* The lift shadow from the light theme is navy-on-navy here and reads
+   as nothing. Brighten the edge instead of deepening the shadow. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.number-widget-box:hover,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.shortcut-widget-box:hover,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.links-widget-box:hover,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.dashboard-widget-box:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,.36), 0 0 0 1px rgba(255,255,255,.55) !important;
+}
+
+/* Card interiors stay on the light palette — they are white plates. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget .widget-title,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget .widget-title > span {
+  color: var(--agri-ink) !important;
+  font-weight: 700 !important;
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget .widget-subtitle,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget .quick-list-item .timestamp {
+  color: var(--agri-ink-muted) !important;   /* 5.92:1 on white */
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget .link-item,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget .link-item .link-content {
+  color: var(--agri-link) !important;
+}
+
+/* ── KPI figure — the cockpit signature ─────────────────────── */
+/* Large and light-weight, the way B1 sets it. Frappe writes an inline
+   style="color:…" onto .number when the card has a colour configured,
+   and inline beats everything short of !important, so this carries it. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.number-widget-box .widget-content .number {
+  font-size: clamp(30px, 3.2vw, 46px) !important;
+  font-weight: 300 !important;
+  line-height: 1.1 !important;
+  color: var(--agri-primary) !important;
+}
+/* Delta row. --agri-success/--agri-danger clear 4.5:1 on white where
+   the brighter B1 green and red do not. Colour is never the only
+   signal: frappe renders a directional arrow glyph in the pill, and
+   that glyph is what carries the meaning under red/green colour
+   blindness — do not remove it. */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .card-stats.green-stat,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .card-stats.green-stat .percentage-stat-area {
+  color: var(--agri-success) !important;     /* 6.15:1 */
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .card-stats.red-stat,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .card-stats.red-stat .percentage-stat-area {
+  color: var(--agri-danger) !important;      /* 7.01:1 */
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .card-stats.grey-stat,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .card-stats.grey-stat .percentage-stat-area {
+  color: var(--agri-ink-muted) !important;   /* 5.92:1 */
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .card-stats.green-stat use { stroke: var(--agri-success) !important; }
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .card-stats.red-stat use { stroke: var(--agri-danger) !important; }
+
+/* ── Chart tile ─────────────────────────────────────────────── */
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .widget.dashboard-widget-box .chart-container rect.bar {
+  fill: var(--agri-chart-bar) !important;    /* 3.04:1 on white */
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .graph-svg-tip.comparison {
+  background: #FFFFFF !important;
+  color: var(--agri-ink) !important;
+  border: 1px solid var(--agri-border-strong) !important;
+  box-shadow: var(--agri-shadow-lg) !important;
+}
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .graph-svg-tip.comparison .title,
+html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .graph-svg-tip .data-point-list li {
+  color: var(--agri-ink) !important;
+}
