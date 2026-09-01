@@ -442,6 +442,66 @@ PUSH_FLAGS = {
 }
 
 
+def _flag_for(doc):
+    """The settings toggle that authorises pushing this document."""
+    if doc.doctype == "Sales Invoice":
+        return "push_credit_notes" if cint(doc.get("is_return")) else "push_sales_invoices"
+    return PUSH_FLAGS.get(doc.doctype)
+
+
+@frappe.whitelist()
+def push_document(doctype, name, force=0):
+    """Push one document on demand — the "Send to SAP" button on the
+    document, and "Resend" on a failed log entry."""
+    if doctype not in PUSHERS:
+        frappe.throw(_("{0} does not push to SAP.").format(doctype))
+    if not frappe.has_permission(doctype, "write", doc=name):
+        raise frappe.PermissionError
+    if not integration_enabled():
+        frappe.throw(_("SAP integration is off — enable it in SAP Integration Settings first."))
+
+    doc = frappe.get_doc(doctype, name)
+
+    flag = _flag_for(doc)
+    if flag and not cint(get_settings().get(flag)):
+        frappe.throw(
+            _("Pushing {0} is switched off in SAP Integration Settings.").format(_(doctype))
+        )
+
+    # Guard against creating a second document in SAP by accident.
+    if doc.get("custom_sap_sync_status") == "Synced" and not cint(force):
+        frappe.throw(
+            _("{0} is already in SAP as document {1}. Use Resend only if that document was removed there.")
+            .format(name, doc.get("custom_sap_docnum") or doc.get("custom_sap_docentry") or "?")
+        )
+
+    pusher = PUSHERS[doctype][0]
+    try:
+        ok = pusher(doc)
+    except Exception as e:
+        _stamp(doc, "Failed")
+        log_sap("Push", "Failed", "manual", doctype, name, message=str(e))
+        frappe.throw(_("SAP rejected {0}: {1}").format(name, str(e)[:300]))
+
+    frappe.db.commit()
+    if ok:
+        doc.reload()
+        return _("{0} sent to SAP as document {1}.").format(
+            name, doc.get("custom_sap_docnum") or doc.get("custom_sap_docentry") or "")
+    return _("{0} could not be sent — see the SAP Integration Log for the reason.").format(name)
+
+
+@frappe.whitelist()
+def resend_from_log(log_name):
+    """Re-push the document a failed log entry refers to."""
+    log = frappe.get_doc("SAP Integration Log", log_name)
+    if not log.reference_doctype or not log.reference_name:
+        frappe.throw(_("This log entry is not tied to a document, so there is nothing to resend."))
+    if not frappe.db.exists(log.reference_doctype, log.reference_name):
+        frappe.throw(_("{0} {1} no longer exists.").format(log.reference_doctype, log.reference_name))
+    return push_document(log.reference_doctype, log.reference_name)
+
+
 def push_pending(limit=100):
     """Push everything not yet in SAP: docs whose sync status is Failed,
     plus never-attempted docs created on/after the go-live date (so a

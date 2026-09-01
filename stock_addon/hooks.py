@@ -23,6 +23,7 @@ app_include_js = [
     "/assets/stock_addon/js/general_ledger_report.js",
     "/assets/stock_addon/js/stock_addon_theme.js",
     "/assets/stock_addon/js/form_sidebar_toggle.js",
+    "/assets/stock_addon/js/sap_send_button.js",
 ]
 
 # Ship the desk colour overrides ("Stock Addon Theme Settings") with the
