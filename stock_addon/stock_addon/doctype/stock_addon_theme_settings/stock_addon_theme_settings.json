@@ -1,0 +1,154 @@
+{
+ "actions": [],
+ "creation": "2026-09-01 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "intro_html",
+  "section_chrome",
+  "primary_navy",
+  "section_header_colour",
+  "column_break_chrome",
+  "sidebar_background",
+  "navbar_background",
+  "section_canvas",
+  "canvas_top",
+  "column_break_canvas",
+  "canvas_bottom",
+  "section_accents",
+  "accent_colour",
+  "selected_highlight",
+  "column_break_accents",
+  "zebra_tint",
+  "border_colour"
+ ],
+ "fields": [
+  {
+   "default": "0",
+   "description": "Off = the colours shipped with the app. On = the colours below.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Use Custom Colours"
+  },
+  {
+   "fieldname": "intro_html",
+   "fieldtype": "HTML",
+   "options": "<p class=\"text-muted small\">Colours apply live as you pick them, so you can see the result before saving. Save to make them permanent for everyone; use <b>Reset to Defaults</b> to go back to the shipped palette.</p>"
+  },
+  {
+   "depends_on": "enabled",
+   "fieldname": "section_chrome",
+   "fieldtype": "Section Break",
+   "label": "Chrome"
+  },
+  {
+   "description": "Section headers, primary buttons, form headings.",
+   "fieldname": "primary_navy",
+   "fieldtype": "Color",
+   "label": "Primary Navy"
+  },
+  {
+   "description": "The accent bar and text on section headings.",
+   "fieldname": "section_header_colour",
+   "fieldtype": "Color",
+   "label": "Section Header"
+  },
+  {
+   "fieldname": "column_break_chrome",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The left sidebar background.",
+   "fieldname": "sidebar_background",
+   "fieldtype": "Color",
+   "label": "Sidebar Background"
+  },
+  {
+   "description": "The top navbar — usually a step darker than the sidebar.",
+   "fieldname": "navbar_background",
+   "fieldtype": "Color",
+   "label": "Navbar Background"
+  },
+  {
+   "depends_on": "enabled",
+   "description": "The gradient behind the workspace tiles. White text sits on this, so keep it dark enough to read against.",
+   "fieldname": "section_canvas",
+   "fieldtype": "Section Break",
+   "label": "Workspace Canvas"
+  },
+  {
+   "description": "Top-left of the gradient, and the workspace title bar.",
+   "fieldname": "canvas_top",
+   "fieldtype": "Color",
+   "label": "Canvas (Top)"
+  },
+  {
+   "fieldname": "column_break_canvas",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Bottom-right of the gradient — the lighter end.",
+   "fieldname": "canvas_bottom",
+   "fieldtype": "Color",
+   "label": "Canvas (Bottom)"
+  },
+  {
+   "depends_on": "enabled",
+   "fieldname": "section_accents",
+   "fieldtype": "Section Break",
+   "label": "Accents & Surfaces"
+  },
+  {
+   "description": "Links and the focus ring on inputs.",
+   "fieldname": "accent_colour",
+   "fieldtype": "Color",
+   "label": "Accent / Focus"
+  },
+  {
+   "description": "The selected item in the sidebar.",
+   "fieldname": "selected_highlight",
+   "fieldtype": "Color",
+   "label": "Selected Highlight"
+  },
+  {
+   "fieldname": "column_break_accents",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Alternating row tint in lists and tables.",
+   "fieldname": "zebra_tint",
+   "fieldtype": "Color",
+   "label": "Zebra Row Tint"
+  },
+  {
+   "description": "Hairlines between fields, cards and table cells.",
+   "fieldname": "border_colour",
+   "fieldtype": "Color",
+   "label": "Border"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-01 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Stock Addon",
+ "name": "Stock Addon Theme Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

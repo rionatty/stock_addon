@@ -1,11 +1,36 @@
 // Stock Addon — global desk JS (ported from rionatty/Agricalt `twiga`).
-// Status indicator colours for Stock Addon doctypes. Wrapped in an IIFE
-// so nothing here collides with the agriculture app's copy when both
-// apps are installed on one site.
+//
+// Two jobs:
+//   1. Apply the colour overrides from "Stock Addon Theme Settings".
+//      They ride along on the session boot (see stock_addon/theme.py),
+//      so the desk is painted before first render — no extra request,
+//      no flash of the shipped palette.
+//   2. Status indicator colours for Stock Addon doctypes.
+//
+// Wrapped in an IIFE so nothing here collides with the agriculture
+// app's copy when both apps are installed on one site.
 
 (function () {
 	frappe.provide("stock_addon");
 
+	// ── 1. Theme colour overrides ──────────────────────────────
+	stock_addon.apply_palette = function (palette) {
+		const root = document.documentElement;
+		Object.entries(palette || {}).forEach(([cssVar, value]) => {
+			if (value) root.style.setProperty(cssVar, value);
+		});
+	};
+
+	function apply_boot_palette() {
+		if (frappe.boot && frappe.boot.stock_addon_theme) {
+			stock_addon.apply_palette(frappe.boot.stock_addon_theme);
+		}
+	}
+
+	apply_boot_palette();               // boot is usually already inlined
+	$(document).on("startup", apply_boot_palette);   // belt and braces
+
+	// ── 2. Status indicator colours ────────────────────────────
 	const STATUS_COLORS = {
 		// Generic workflow
 		"Draft":     "gray",

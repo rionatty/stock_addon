@@ -25,6 +25,10 @@ app_include_js = [
     "/assets/stock_addon/js/form_sidebar_toggle.js",
 ]
 
+# Ship the desk colour overrides ("Stock Addon Theme Settings") with the
+# session boot so they are applied before first paint.
+extend_bootinfo = "stock_addon.stock_addon.theme.boot_session"
+
 # include js, css files in header of web template
 # web_include_css = "/assets/stock_addon/css/stock_addon.css"
 # web_include_js = "/assets/stock_addon/js/stock_addon.js"

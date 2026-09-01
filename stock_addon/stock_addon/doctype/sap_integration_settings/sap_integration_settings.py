@@ -62,6 +62,13 @@ def sync_currencies_now():
 
 
 @frappe.whitelist()
+def assign_customer_codes_now():
+    _require_manager()
+    from stock_addon.stock_addon.sap_integration.masters import assign_customer_codes
+    return assign_customer_codes()
+
+
+@frappe.whitelist()
 def pull_transfers_now():
     _require_manager()
     from stock_addon.stock_addon.sap_integration.stock_pull import pull_van_transfers

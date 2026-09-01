@@ -382,6 +382,95 @@ def sync_taxes():
     return msg
 
 
+# ------------------------------------------- uniform customer codes
+# SAP B1 OCRD.CardCode is nvarchar(15) and is the business partner's
+# identity. ERPNext sites that name customers by Customer Name end up
+# with IDs like "NDIBAIRIRA MARIA" — too long, with spaces — which SAP
+# rejects outright. This gives every un-coded customer a uniform code
+# (prefix + running number) and makes it the ERPNext ID as well, so the
+# two systems address the same partner the same way.
+SAP_CARDCODE_MAX = 15
+
+
+def _next_code_number(prefix):
+    """Continue the sequence from the highest existing <prefix><digits>."""
+    rows = frappe.db.sql(
+        """
+        SELECT custom_sap_cardcode FROM `tabCustomer`
+        WHERE custom_sap_cardcode LIKE %s
+        """,
+        (prefix + "%",),
+    )
+    highest = 0
+    for (code,) in rows:
+        tail = (code or "")[len(prefix):]
+        if tail.isdigit():
+            highest = max(highest, int(tail))
+    return highest + 1
+
+
+@frappe.whitelist()
+def assign_customer_codes(limit=500):
+    """Assign a uniform SAP CardCode to every customer that lacks one,
+    and rename the customer to it. Idempotent — customers that already
+    have a code are skipped."""
+    frappe.only_for(("System Manager", "Administrator"))
+
+    settings = get_settings()
+    prefix = ((settings.get("customer_code_prefix") or "C").strip().upper())
+    if not prefix.isalnum():
+        frappe.throw(_("Customer Code Prefix must be letters/numbers only."))
+
+    names = frappe.get_all(
+        "Customer",
+        or_filters=[
+            ["custom_sap_cardcode", "is", "not set"],
+            ["custom_sap_cardcode", "=", ""],
+        ],
+        pluck="name",
+        limit=int(limit),
+        order_by="creation asc",
+    )
+
+    number = _next_code_number(prefix)
+    assigned = failed = 0
+    for name in names:
+        # find the next free code (a manual entry may already hold one)
+        code = f"{prefix}{number:05d}"
+        while frappe.db.exists("Customer", code) or frappe.db.exists(
+            "Customer", {"custom_sap_cardcode": code}
+        ):
+            number += 1
+            code = f"{prefix}{number:05d}"
+        if len(code) > SAP_CARDCODE_MAX:
+            frappe.throw(
+                _("Generated code {0} exceeds SAP's {1}-character CardCode limit — use a shorter prefix.")
+                .format(code, SAP_CARDCODE_MAX)
+            )
+
+        try:
+            frappe.db.set_value("Customer", name, "custom_sap_cardcode", code,
+                                update_modified=False)
+            if name != code:
+                from frappe.model.rename_doc import rename_doc as _rename_doc
+                _rename_doc(doctype="Customer", old=name, new=code,
+                            ignore_permissions=True, show_alert=False,
+                            rebuild_search=False)
+            assigned += 1
+            number += 1
+            frappe.db.commit()
+        except Exception:
+            frappe.db.rollback()
+            frappe.log_error(frappe.get_traceback(),
+                             f"SAP customer code assignment failed for {name}")
+            failed += 1
+
+    msg = _("Customer codes assigned: {0} coded, {1} failed ({2} scanned)").format(
+        assigned, failed, len(names))
+    log_sap("Masters", "Failed" if failed else "Success", "assign_customer_codes", message=msg)
+    return msg
+
+
 # ---------------------------------------------------------- currencies
 def sync_currencies():
     """Pull SAP currencies and make sure each exists and is enabled in
@@ -474,6 +563,7 @@ def sync_customers():
 
     default_customer_group = settings.default_customer_group or _first_leaf("Customer Group")
     territory = settings.default_territory or _first_leaf("Territory")
+    renamed = 0
 
     created = updated = 0
     for row in rows:
@@ -497,6 +587,22 @@ def sync_customers():
             # linked to a different SAP card (SAP allows duplicate names)
             if not frappe.db.get_value("Customer", card_name, "custom_sap_cardcode"):
                 existing = card_name
+
+        # SAP CardCode is the identity — make it the ERPNext docname too.
+        # With Selling Settings "Customer Naming By = Customer Name" the
+        # docname would otherwise be the person's name, which is neither
+        # uniform nor a legal SAP CardCode (OCRD.CardCode is 15 chars).
+        if existing and existing != card_code and not frappe.db.exists("Customer", card_code):
+            try:
+                from frappe.model.rename_doc import rename_doc as _rename_doc
+                _rename_doc(doctype="Customer", old=existing, new=card_code,
+                            ignore_permissions=True, show_alert=False,
+                            rebuild_search=False)
+                existing = card_code
+                renamed += 1
+            except Exception:
+                frappe.log_error(frappe.get_traceback(),
+                                 f"SAP customer rename failed: {existing} -> {card_code}")
 
         if existing:
             values = {"customer_name": card_name, "custom_sap_cardcode": card_code}
@@ -526,10 +632,13 @@ def sync_customers():
             "custom_sap_salesperson": sales_person,
         })
         doc.flags.ignore_mandatory = True
-        doc.insert(ignore_permissions=True)
+        # set_name pins the docname to the SAP CardCode, bypassing the
+        # site's "Customer Naming By" setting entirely
+        doc.insert(ignore_permissions=True, set_name=card_code)
         created += 1
 
-    msg = _("Customers synced from SAP: {0} created, {1} updated, {2} scanned").format(created, updated, len(rows))
+    msg = _("Customers synced from SAP: {0} created, {1} updated, {2} renamed to their SAP CardCode, "
+            "{3} scanned").format(created, updated, renamed, len(rows))
     log_sap("Masters", "Success", "BusinessPartners", message=msg)
     frappe.db.commit()
     return msg
