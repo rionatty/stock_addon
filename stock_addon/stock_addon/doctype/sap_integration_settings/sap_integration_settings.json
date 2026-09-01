@@ -31,6 +31,7 @@
   "column_break_push",
   "push_incoming_payments",
   "push_expense_journals",
+  "prices_include_tax",
   "sap_cash_account",
   "section_pull",
   "pull_van_transfers",
@@ -201,6 +202,13 @@
    "fieldname": "push_expense_journals",
    "fieldtype": "Check",
    "label": "Push Expenses as Journal Vouchers"
+  },
+  {
+   "default": "1",
+   "description": "For invoices that carry no ERPNext tax rows: tick if the price already includes VAT. The gross price is then sent to SAP, which derives the VAT itself, so both documents show the same total. Invoices that do carry tax rows are read from the document and ignore this.",
+   "fieldname": "prices_include_tax",
+   "fieldtype": "Check",
+   "label": "Prices Include Tax"
   },
   {
    "description": "Fallback only. Payments post to the SAP G/L Account set on the ERPNext account the money went into; this is used when that account has no code yet.",

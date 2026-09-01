@@ -163,6 +163,27 @@ def _guarded(pusher, doc, endpoint):
         )
 
 
+def _is_tax_inclusive(doc):
+    """Is the ERPNext rate the price the customer pays (VAT included)?
+
+    SAP always computes VAT itself from the line's tax code, so sending a
+    gross price as UnitPrice makes SAP add the tax a second time — the
+    document then totals more than the ERPNext invoice.
+
+    Read from the document where possible:
+      - tax rows flagged "included in print rate" -> rate is gross
+      - ordinary tax rows on top                  -> rate is net
+      - no tax rows at all                        -> ambiguous, so the
+        "Prices Include Tax" setting decides (default on: retail/van
+        prices quote VAT-inclusive, and SAP still applies its own
+        default tax code to the line).
+    """
+    tax_rows = doc.get("taxes") or []
+    if tax_rows:
+        return any(cint(t.get("included_in_print_rate")) for t in tax_rows)
+    return cint(get_settings().get("prices_include_tax"))
+
+
 def _vat_group_for(doc):
     """SAP VatGroup for the invoice's ERPNext tax template, via the
     Settings → Tax Mapping table. None when unmapped (SAP then applies
@@ -180,13 +201,21 @@ def _vat_group_for(doc):
 def push_sales_invoice_doc(doc):
     endpoint = "CreditNotes" if cint(doc.is_return) else "Invoices"
     vat_group = _vat_group_for(doc)
+    tax_inclusive = _is_tax_inclusive(doc)
     lines = []
     for item in doc.items:
         line = {
             "ItemCode": item.item_code,
             "Quantity": abs(flt(item.qty)),
-            "UnitPrice": flt(item.rate),
         }
+        if tax_inclusive:
+            # PriceAfterVAT is SAP's gross unit price: it back-computes the
+            # net and the VAT, so the SAP document totals exactly what the
+            # ERPNext invoice does.
+            line["PriceAfterVAT"] = flt(item.rate)
+        else:
+            # net price — SAP adds the tax on top, mirroring ERPNext
+            line["UnitPrice"] = flt(item.net_rate or item.rate)
         if vat_group:
             line["VatGroup"] = vat_group
         wh = _sap_warehouse(item.warehouse)
