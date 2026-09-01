@@ -223,7 +223,16 @@ def sync_items():
         frappe.log_error(frappe.get_traceback(), "SAP ItemGroups fetch failed")
 
     default_group = settings.default_item_group or _first_leaf("Item Group")
-    created = updated = conversions = 0
+    # all codes in this SAP pull — guards the self-heal rename below from
+    # ever touching a different SAP item that shares the same name
+    sap_codes = {r.get("ItemCode") for r in rows if r.get("ItemCode")}
+    # naming-series prefixes (e.g. "STO-ITEM-") — the self-heal only ever
+    # renames items whose docname came from the series, i.e. actual
+    # victims of the old autoname behaviour, never deliberately-coded items
+    series_options = (frappe.get_meta("Item").get_field("naming_series").options or "") \
+        if frappe.get_meta("Item").get_field("naming_series") else ""
+    series_prefixes = [o.split(".")[0] for o in series_options.split("\n") if o.strip()] or ["STO-ITEM-"]
+    created = updated = renamed = conversions = 0
     for row in rows:
         if row.get("Frozen") == "tYES" or row.get("Valid") == "tNO":
             continue
@@ -236,7 +245,33 @@ def sync_items():
         resolved_group = resolved_item_groups.get(row.get("ItemsGroupCode"))
         item_group = resolved_group or default_group
 
-        if frappe.db.exists("Item", code):
+        exists = frappe.db.exists("Item", code)
+        if not exists:
+            # Self-heal items synced before the naming fix: with Stock
+            # Settings "Item Naming By = Naming Series", Item.autoname used
+            # to replace the SAP code with a series name (STO-ITEM-0001).
+            # Adopt such an item back by its exact SAP item name — only an
+            # unambiguous, series-named match (never a deliberately-coded
+            # or differently-coded SAP item).
+            same_name = frappe.get_all(
+                "Item",
+                filters={"item_name": name, "variant_of": ("is", "not set")},
+                or_filters=[["name", "like", f"{p}%"] for p in series_prefixes],
+                pluck="name", limit=2,
+            )
+            if len(same_name) == 1 and same_name[0] != code and same_name[0] not in sap_codes:
+                try:
+                    from frappe.model.rename_doc import rename_doc as _rename_doc
+                    _rename_doc(doctype="Item", old=same_name[0], new=code,
+                                ignore_permissions=True, show_alert=False,
+                                rebuild_search=False)
+                    renamed += 1
+                except Exception:
+                    frappe.log_error(frappe.get_traceback(),
+                                     f"SAP item adopt-rename failed: {same_name[0]} -> {code}")
+                exists = frappe.db.exists("Item", code)
+
+        if exists:
             current = frappe.db.get_value("Item", code, ["item_name", "item_group"], as_dict=True)
             changes = {}
             if current.item_name != name:
@@ -249,7 +284,10 @@ def sync_items():
                 frappe.db.set_value("Item", code, changes, update_modified=False)
                 updated += 1
         else:
-            frappe.get_doc({
+            # set_name pins the docname to the SAP code, bypassing
+            # Item.autoname — so the site's "Item Naming By" setting can
+            # never rename synced items again
+            doc = frappe.get_doc({
                 "doctype": "Item",
                 "item_code": code,
                 "item_name": name,
@@ -258,7 +296,10 @@ def sync_items():
                 "is_stock_item": 1,
                 "has_batch_no": 1 if _bool(row.get("ManageBatchNumbers")) else 0,
                 "is_sales_item": 1,
-            }).insert(ignore_permissions=True)
+            })
+            # set_name pins the docname before autoname can run, so
+            # doc.name == doc.item_code == the SAP code, always
+            doc.insert(ignore_permissions=True, set_name=code)
             created += 1
         # auto-map the item's SAP UoM group (cartons/pieces etc.)
         if row.get("UoMGroupEntry") in group_lines:
@@ -270,8 +311,9 @@ def sync_items():
             except Exception:
                 frappe.log_error(frappe.get_traceback(), f"UOM conversion sync failed for {code}")
 
-    msg = _("Items synced from SAP: {0} created, {1} updated, {2} UOM conversions mapped, {3} scanned").format(
-        created, updated, conversions, len(rows))
+    msg = _("Items synced from SAP: {0} created, {1} updated, {2} renamed to their SAP code, "
+            "{3} UOM conversions mapped, {4} scanned").format(
+        created, updated, renamed, conversions, len(rows))
     log_sap("Masters", "Success", "Items", message=msg)
     frappe.db.commit()
     return msg
