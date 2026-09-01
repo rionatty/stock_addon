@@ -358,6 +358,7 @@ scheduler_events = {
         # hourly: re-sync items + customers (only if auto-sync is on)
         "0 * * * *": [
             "stock_addon.stock_addon.sap_integration.masters.scheduled_masters_sync",
+            "stock_addon.stock_addon.sap_integration.pricing.scheduled_pricing_sync",
         ],
     },
 }

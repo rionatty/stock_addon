@@ -540,9 +540,19 @@ def sync_customers():
         frappe.log_error(frappe.get_traceback(), "SAP SalesPersons sync failed")
 
     rows = client.get_all("BusinessPartners", params={
-        "$select": "CardCode,CardName,CardType,Currency,SalesPersonCode,Frozen,Valid,GroupCode",
+        "$select": "CardCode,CardName,CardType,Currency,SalesPersonCode,Frozen,Valid,GroupCode,PriceListNum",
         "$filter": "CardType eq 'cCustomer'",
     })
+
+    # SAP price list number -> ERPNext Price List name. Without this every
+    # customer falls back to Standard Selling regardless of the list they
+    # are on in SAP. A pricing failure must not sink the customer sync.
+    price_list_by_num = {}
+    try:
+        from stock_addon.stock_addon.sap_integration.pricing import _price_list_map
+        price_list_by_num = _price_list_map(client)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "SAP price list map fetch failed")
 
     # real SAP customer groups (Code -> Name), mirrored 1:1 and resolved
     # once per run (failed creations log once, not once per customer)
@@ -580,6 +590,7 @@ def sync_customers():
         sales_person = sales_person_map.get(row.get("SalesPersonCode"))
         resolved_group = resolved_bp_groups.get(row.get("GroupCode"))
         customer_group = resolved_group or default_customer_group
+        price_list = price_list_by_num.get(row.get("PriceListNum"))
 
         existing = frappe.db.get_value("Customer", {"custom_sap_cardcode": card_code}, "name")
         if not existing and frappe.db.exists("Customer", card_name):
@@ -612,6 +623,9 @@ def sync_customers():
                 values["default_currency"] = currency
             if sales_person:
                 values["custom_sap_salesperson"] = sales_person
+            # SAP owns which list a customer is priced on
+            if price_list:
+                values["default_price_list"] = price_list
             # SAP is the master: whenever its group resolves, it wins —
             # but never re-home on a failed resolution (fallback)
             if resolved_group and \
@@ -630,6 +644,7 @@ def sync_customers():
             "default_currency": currency,
             "custom_sap_cardcode": card_code,
             "custom_sap_salesperson": sales_person,
+            "default_price_list": price_list,
         })
         doc.flags.ignore_mandatory = True
         # set_name pins the docname to the SAP CardCode, bypassing the

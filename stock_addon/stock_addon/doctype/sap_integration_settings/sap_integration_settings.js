@@ -30,6 +30,7 @@ frappe.ui.form.on("SAP Integration Settings", {
 			frm.add_custom_button(__("Sync Customers"), () => call("sync_customers_now", "Syncing customers from SAP"), __("Masters"));
 			frm.add_custom_button(__("Sync Taxes"), () => call("sync_taxes_now", "Syncing tax codes from SAP"), __("Masters"));
 			frm.add_custom_button(__("Sync Currencies"), () => call("sync_currencies_now", "Syncing currencies from SAP"), __("Masters"));
+			frm.add_custom_button(__("Sync Pricing"), () => call("sync_pricing_now", "Syncing pricing from SAP"), __("Masters"));
 			frm.add_custom_button(__("Assign Customer Codes"), () => {
 				frappe.confirm(
 					__("Customers without a SAP CardCode will be given a uniform code ({0}00001…) and <b>renamed to it</b>. Their transaction history follows the rename. Continue?", [
