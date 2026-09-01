@@ -21,6 +21,8 @@ Design rules:
     invoices so a timed-out push is adopted, not double-posted).
 """
 
+import json
+
 import frappe
 from frappe import _
 from frappe.utils import cint, flt
@@ -96,6 +98,41 @@ def _account_code(account, required=True):
     return code or None
 
 
+def _items_missing_in_sap(item_codes):
+    """Item codes SAP does not have.
+
+    SAP silently DROPS document lines whose item it does not recognise,
+    then rejects the document for having no lines ("Item number is
+    missing", -5009). Checking first turns that into a message naming the
+    actual items — typically ones created in ERPNext that were never
+    created in, or synced from, SAP.
+    """
+    codes = sorted({(c or "").strip() for c in item_codes if (c or "").strip()})
+    if not codes:
+        return []
+    client = SAPClient()
+    found = set()
+    for start in range(0, len(codes), 20):   # keep each $filter a sane length
+        chunk = codes[start:start + 20]
+        expression = " or ".join(
+            "ItemCode eq '{0}'".format(code.replace("'", "''")) for code in chunk
+        )
+        rows = client.get_all("Items", params={"$select": "ItemCode", "$filter": expression})
+        found.update((row.get("ItemCode") or "").strip() for row in rows)
+    return [code for code in codes if code not in found]
+
+
+def _assert_items_in_sap(doc):
+    missing = _items_missing_in_sap([item.item_code for item in doc.items])
+    if missing:
+        raise SAPError(
+            "These items do not exist in SAP: {0}. They were created in ERPNext "
+            "rather than synced from SAP, so SAP discards the lines and rejects the "
+            "document. Create them in SAP, or use items that came from the item "
+            "sync.".format(", ".join(missing))
+        )
+
+
 def _stamp(doc, status, docentry=None, docnum=None):
     values = {"custom_sap_sync_status": status}
     if docentry is not None:
@@ -145,7 +182,14 @@ def _push(doc, endpoint, payload, direction_label):
         return True
     except Exception as e:
         _stamp(doc, "Failed")
-        log_sap("Push", "Failed", endpoint, doc.doctype, doc.name, message=str(e))
+        # record what was actually sent — SAP's errors rarely say which
+        # field or line it objected to, and the payload usually shows it
+        try:
+            sent = json.dumps(payload, indent=1, default=str)[:4000]
+        except Exception:
+            sent = str(payload)[:4000]
+        log_sap("Push", "Failed", endpoint, doc.doctype, doc.name,
+                message=f"{e}\n\n--- payload sent ---\n{sent}")
         frappe.msgprint(
             _("SAP push failed for {0} — saved locally, will retry. ({1})").format(
                 doc.name, str(e)[:200]),
@@ -210,6 +254,7 @@ def _vat_group_for(doc):
 # ------------------------------------------------------- sales invoice
 def push_sales_invoice_doc(doc):
     endpoint = "CreditNotes" if cint(doc.is_return) else "Invoices"
+    _assert_items_in_sap(doc)
     vat_group = _vat_group_for(doc)
     tax_inclusive = _is_tax_inclusive(doc)
     lines = []
@@ -262,6 +307,7 @@ def push_material_request_doc(doc):
     # is picked at Stock Entry time); SAP will not. Fall back to the
     # configured default so desk-created requests still reach SAP.
     default_source = get_settings().get("default_source_warehouse")
+    _assert_items_in_sap(doc)
     lines = []
     for item in doc.items:
         from_wh = item.get("from_warehouse") or doc.get("set_from_warehouse") or default_source
