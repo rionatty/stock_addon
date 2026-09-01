@@ -67,7 +67,8 @@ def _price_list_map(client=None):
     """SAP PriceListNo -> ERPNext Price List name (only lists that exist)."""
     client = client or SAPClient()
     mapping = {}
-    for row in client.get_all("PriceLists", params={"$select": "PriceListNo,PriceListName"}):
+    # no $select: field names vary by B1 version and a bad one is a 400
+    for row in client.get_all("PriceLists"):
         number, name = row.get("PriceListNo"), (row.get("PriceListName") or "").strip()
         if number is None or not name:
             continue
@@ -99,19 +100,34 @@ def _customer_for(card_code):
     return frappe.db.get_value("Customer", {"custom_sap_cardcode": card_code}, "name")
 
 
+def _item_price_has(field):
+    """Item Price lost min_qty in newer ERPNext — never reference a
+    column this site does not have."""
+    return bool(frappe.get_meta("Item Price").get_field(field))
+
+
 def _upsert_item_price(item_code, price_list, rate, customer=None,
                        min_qty=0, valid_from=None, valid_upto=None, currency=None):
     """Item Price keyed on its natural identity, so a re-sync updates the
-    same row instead of stacking duplicates."""
+    same row instead of stacking duplicates.
+
+    Quantity tiers are only expressible here when the site's Item Price
+    carries min_qty; otherwise the tier lives solely in its Pricing Rule,
+    which always supports quantity ranges.
+    """
     if not frappe.db.exists("Item", item_code) or not price_list:
+        return 0
+    supports_min_qty = _item_price_has("min_qty")
+    if flt(min_qty) and not supports_min_qty:
         return 0
     filters = {
         "item_code": item_code,
         "price_list": price_list,
         "customer": customer or "",
-        "min_qty": flt(min_qty),
         "valid_from": valid_from,
     }
+    if supports_min_qty:
+        filters["min_qty"] = flt(min_qty)
     existing = frappe.db.get_value("Item Price", filters, ["name", "price_list_rate"], as_dict=True)
     if existing:
         if flt(existing.price_list_rate) != flt(rate):
@@ -119,18 +135,20 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
                                 update_modified=False)
             return 1
         return 0
-    doc = frappe.get_doc({
+    payload = {
         "doctype": "Item Price",
         "item_code": item_code,
         "price_list": price_list,
         "price_list_rate": flt(rate),
         "customer": customer,
-        "min_qty": flt(min_qty),
         "valid_from": valid_from,
         "valid_upto": valid_upto,
         "selling": 1,
         "currency": currency,
-    })
+    }
+    if supports_min_qty:
+        payload["min_qty"] = flt(min_qty)
+    doc = frappe.get_doc(payload)
     doc.flags.ignore_permissions = True
     doc.insert(ignore_permissions=True)
     return 1
@@ -187,9 +205,7 @@ def _date(value):
 # ------------------------------------------------------- 4. price list
 def sync_price_lists(client):
     """SAP price lists -> ERPNext Price Lists (the base tier)."""
-    rows = client.get_all("PriceLists", params={
-        "$select": "PriceListNo,PriceListName,PrimeCurrency,Active",
-    })
+    rows = client.get_all("PriceLists")
     created = 0
     for row in rows:
         if row.get("Active") == "tNO":
@@ -242,10 +258,16 @@ def sync_special_prices(client):
         "$select": "ItemCode,CardCode,Price,Currency,DiscountPercent,PriceListNum,SpecialPriceDataAreas",
     })
     prices = rules = 0
+    no_customer = no_item = 0
     for row in rows:
         item_code, card_code = row.get("ItemCode"), row.get("CardCode")
         customer = _customer_for(card_code)
-        if not customer or not item_code or not frappe.db.exists("Item", item_code):
+        # a silent skip here is why a run can report "0 written, N scanned"
+        if not customer:
+            no_customer += 1
+            continue
+        if not item_code or not frappe.db.exists("Item", item_code):
+            no_item += 1
             continue
 
         price_list = frappe.db.get_value("Customer", customer, "default_price_list") \
@@ -292,15 +314,19 @@ def sync_special_prices(client):
                 item_codes=[item_code],
             )
     frappe.db.commit()
-    return f"special prices: {prices} item prices, {rules} rules, {len(rows)} scanned"
+    detail = ""
+    if no_customer or no_item:
+        detail = f" (skipped: {no_customer} unknown CardCode, {no_item} unknown ItemCode)"
+    return f"special prices: {prices} item prices, {rules} rules, {len(rows)} scanned{detail}"
 
 
 # -------------------------------------------------- 2. discount groups
 def sync_discount_groups(client):
     """Discount Groups — a percentage for a partner over an item group."""
-    rows = client.get_all("DiscountGroups", params={
-        "$select": "BPCode,ObjectCode,ObjectKey,Discount,Type,ValidFrom,ValidTo",
-    })
+    entity = client.find_entity("discount", "group") or client.find_entity("discountgroup")
+    if not entity:
+        return "discount groups: skipped (no matching entity on this SAP install)"
+    rows = client.get_all(entity)
     made = 0
     for row in rows:
         customer = _customer_for(row.get("BPCode"))
@@ -337,9 +363,12 @@ def sync_period_volume(client):
     """Period and Volume Discounts — date ranges and quantity breaks on a
     price list, below discount groups in SAP's order."""
     price_lists = _price_list_map(client)
-    rows = client.get_all("PeriodAndVolumeDiscount", params={
-        "$select": "ItemCode,PriceList,PeriodDiscount,VolumeDiscount,ObjectType",
-    })
+    entity = (client.find_entity("period", "volume")
+              or client.find_entity("volumediscount")
+              or client.find_entity("perioddiscount"))
+    if not entity:
+        return "period/volume: skipped (no matching entity on this SAP install)"
+    rows = client.get_all(entity)
     made = 0
     for row in rows:
         item_code = row.get("ItemCode")
@@ -435,3 +464,22 @@ def scheduled_pricing_sync():
             sync_pricing()
     except Exception:
         frappe.log_error(frappe.get_traceback(), "SAP scheduled pricing sync failed")
+
+
+@frappe.whitelist()
+def discover_entities(keyword=None):
+    """List the EntitySets this SAP install exposes.
+
+    Entity naming differs between B1 versions — this is the quickest way
+    to find what a tier should actually bind to when a sync reports
+    "no matching entity".
+    """
+    frappe.only_for(("System Manager", "Administrator"))
+    names = SAPClient().entity_sets()
+    if keyword:
+        needle = keyword.lower()
+        names = [n for n in names if needle in n.lower()]
+    log_sap("Masters", "Success", "$metadata",
+            message=f"{len(names)} entity sets: {', '.join(names)}"[:9000])
+    return f"{len(names)} entity sets found — full list written to the SAP Integration Log:\n" + \
+           ", ".join(names[:60]) + (" …" if len(names) > 60 else "")

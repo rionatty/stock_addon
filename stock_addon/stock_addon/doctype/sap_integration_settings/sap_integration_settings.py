@@ -69,6 +69,13 @@ def sync_pricing_now():
 
 
 @frappe.whitelist()
+def discover_entities_now():
+    _require_manager()
+    from stock_addon.stock_addon.sap_integration.pricing import discover_entities
+    return discover_entities()
+
+
+@frappe.whitelist()
 def assign_customer_codes_now():
     _require_manager()
     from stock_addon.stock_addon.sap_integration.masters import assign_customer_codes

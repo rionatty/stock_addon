@@ -24,6 +24,7 @@ frappe.ui.form.on("SAP Integration Settings", {
 		};
 
 		frm.add_custom_button(__("Test Connection"), () => call("test_connection", "Testing SAP connection"));
+		frm.add_custom_button(__("Discover SAP Entities"), () => call("discover_entities_now", "Reading SAP $metadata"));
 
 		if (frm.doc.enabled) {
 			frm.add_custom_button(__("Sync Items"), () => call("sync_items_now", "Syncing items from SAP"), __("Masters"));

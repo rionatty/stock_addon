@@ -177,6 +177,39 @@ class SAPClient:
             pages += 1
         return rows
 
+    def entity_sets(self):
+        """EntitySet names this Service Layer install actually exposes.
+
+        Entity naming varies between B1 versions, so rather than guessing
+        (and getting a 400 "invalid resource"), read $metadata and match
+        against what is really there. Cached for the session — the
+        document is large and never changes at runtime.
+        """
+        cached = frappe.cache().get_value("sap_b1_entity_sets")
+        if cached:
+            return json.loads(cached)
+        resp = requests.get(
+            f"{self.base_url}/$metadata",
+            cookies=self._cookies(), verify=False, timeout=60,
+        )
+        if resp.status_code != 200:
+            raise SAPError(f"Could not read SAP $metadata ({resp.status_code})")
+        import re as _re
+        names = sorted(set(_re.findall(r'EntitySet\s+Name="([^"]+)"', resp.text)))
+        frappe.cache().set_value("sap_b1_entity_sets", json.dumps(names), expires_in_sec=3600)
+        return names
+
+    def find_entity(self, *keywords):
+        """First EntitySet whose name contains every keyword (case
+        insensitive), or None. Lets a tier bind to whatever this install
+        calls the thing instead of a hard-coded guess."""
+        wanted = [k.lower() for k in keywords]
+        for name in self.entity_sets():
+            lowered = name.lower()
+            if all(k in lowered for k in wanted):
+                return name
+        return None
+
     def test(self):
         """Login and return a human-readable success line."""
         self.login()
