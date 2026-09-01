@@ -831,3 +831,64 @@ html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .gra
 html:not([data-theme="dark"]) .page-container[data-page-route="Workspaces"] .graph-svg-tip .data-point-list li {
   color: var(--agri-ink) !important;
 }
+
+/* ============================================================
+   Collapsible form sidebar  (public/js/form_sidebar_toggle.js)
+
+   The right-hand form panel is hidden by adding
+   .sa-form-sidebar-collapsed to <body>; the main section is a
+   bootstrap `col`, so it reflows to full width on its own.
+
+   The handle is anchored to the main section, NOT the panel —
+   the panel is display:none when collapsed, which would take
+   the button with it.
+
+   Desktop only: below the bootstrap lg breakpoint the panel
+   stacks under the form, where hiding it (and a floating handle
+   over the content) makes no sense.
+   ============================================================ */
+.layout-main-section-wrapper { position: relative; }
+
+.sa-sidebar-toggle {
+  position: absolute;
+  top: 6px;
+  right: -13px;
+  z-index: 3;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 50%;
+  border: 1px solid var(--agri-border-strong);
+  background: #FFFFFF;
+  color: var(--agri-primary);
+  box-shadow: 0 1px 3px rgba(10, 37, 64, .18);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease, right .15s ease;
+}
+.sa-sidebar-toggle:hover {
+  background: var(--agri-primary);
+  color: #FFFFFF;
+}
+.sa-sidebar-toggle:focus-visible {
+  outline: 2px solid var(--agri-accent);
+  outline-offset: 2px;
+}
+
+@media (min-width: 992px) {
+  body.sa-form-sidebar-collapsed .layout-side-section { display: none !important; }
+  /* tuck the handle back inside once the panel is gone */
+  body.sa-form-sidebar-collapsed .sa-sidebar-toggle { right: 8px; }
+}
+
+@media (max-width: 991px) {
+  .sa-sidebar-toggle { display: none; }
+}
+
+html[data-theme="dark"] .sa-sidebar-toggle {
+  background: var(--agri-primary-dark, #0A2540);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, .25);
+}

@@ -18,9 +18,11 @@ app_include_css = "stock_addon.bundle.css"
 #    General Ledger query report (ERPNext owns that report's js, so we
 #    watch the route instead)
 #  - stock_addon_theme.js: status indicator colours (twiga port)
+#  - form_sidebar_toggle.js: collapse/expand the right-hand form panel
 app_include_js = [
     "/assets/stock_addon/js/general_ledger_report.js",
     "/assets/stock_addon/js/stock_addon_theme.js",
+    "/assets/stock_addon/js/form_sidebar_toggle.js",
 ]
 
 # include js, css files in header of web template
