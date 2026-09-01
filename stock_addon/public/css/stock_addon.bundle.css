@@ -667,9 +667,15 @@ html:not([data-theme="dark"]) .navbar .dropdown-menu .icon use {
    ============================================================ */
 
 :root {
-  /* Canvas gradient, read off the B1 cockpit: darker at top-left. */
-  --agri-canvas-top: #1D3D5C;
-  --agri-canvas-bottom: #2C5175;
+  /* Canvas gradient, read off the B1 cockpit: darker at top-left.
+     Lightened from the original #1D3D5C/#2C5175, which read as too
+     deep in use. These two values are the ONLY knob — the gradient
+     and the workspace title bar both derive from them, so they stay
+     in step. White text clears 4.5:1 on both ends (7.8:1 at the top,
+     5.1:1 at the bottom); going much lighter than the bottom value
+     drops body text below AA. */
+  --agri-canvas-top: #2C5480;
+  --agri-canvas-bottom: #42729B;
   /* Hairline that reads on navy without becoming a stripe. */
   --agri-canvas-rule: rgba(255,255,255,.16);
   /* Chart bar. The reference sky blue (#5BC8F5) is only 1.90:1 on a
