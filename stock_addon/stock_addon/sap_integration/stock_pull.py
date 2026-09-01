@@ -36,14 +36,30 @@ from stock_addon.stock_addon.sap_integration.connection import (
 # installs and "InventoryTransfers" on some. Resolve it against the
 # Service Layer's own metadata rather than guessing — and never pick the
 # *Request* entity (OWTQ), which is what we PUSH to, not pull from.
-PREFERRED_TRANSFER_ENTITIES = ("StockTransfers", "InventoryTransfers")
+# Only names that really are the posted stock transfer (OWTR). Nothing
+# else belongs here: probing binds to the first that responds, so a
+# near-miss like InventoryGenExits (a goods issue) would silently mirror
+# the wrong documents into van warehouses.
+PREFERRED_TRANSFER_ENTITIES = (
+    "StockTransfers",
+    "InventoryTransfers",
+    "StockTransfer",
+    "InventoryTransfer",
+)
 
 
 def _transfer_entity(client):
-    available = set(client.entity_sets())
-    for name in PREFERRED_TRANSFER_ENTITIES:
-        if name in available:
-            return name
+    # Probe the real resource paths first — that is the definitive test,
+    # and it does not depend on $metadata being parseable.
+    found = client.probe_entity(PREFERRED_TRANSFER_ENTITIES)
+    if found:
+        return found
+    # Fallback: scan the metadata for anything transfer-shaped that is not
+    # the Request entity (OWTQ — that is the push side) or a draft.
+    try:
+        available = client.entity_sets()
+    except Exception:
+        return None
     for name in sorted(available):
         lowered = name.lower()
         if "transfer" in lowered and "request" not in lowered and "draft" not in lowered:

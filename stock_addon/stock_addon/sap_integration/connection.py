@@ -196,8 +196,32 @@ class SAPClient:
             raise SAPError(f"Could not read SAP $metadata ({resp.status_code})")
         import re as _re
         names = sorted(set(_re.findall(r'EntitySet\s+Name="([^"]+)"', resp.text)))
-        frappe.cache().set_value("sap_b1_entity_sets", json.dumps(names), expires_in_sec=3600)
+        # never cache an empty result — a parse that matched nothing would
+        # otherwise look like "this install exposes no entities" for an hour
+        if names:
+            frappe.cache().set_value("sap_b1_entity_sets", json.dumps(names), expires_in_sec=3600)
         return names
+
+    def probe_entity(self, candidates):
+        """First candidate whose resource path actually responds.
+
+        More reliable than reading $metadata: it tests the exact thing
+        that matters — whether SAP serves that path — and does not depend
+        on the metadata document being parseable. The winner is cached so
+        this costs one request per sync, not per call.
+        """
+        cache_key = "sap_b1_entity:" + "|".join(candidates)
+        cached = frappe.cache().get_value(cache_key)
+        if cached:
+            return cached
+        for name in candidates:
+            try:
+                self.get(name, params={"$top": 1})
+            except Exception:
+                continue
+            frappe.cache().set_value(cache_key, name, expires_in_sec=3600)
+            return name
+        return None
 
     def find_entity(self, *keywords):
         """First EntitySet whose name contains every keyword (case

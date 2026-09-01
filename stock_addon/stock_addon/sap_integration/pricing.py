@@ -323,7 +323,8 @@ def sync_special_prices(client):
 # -------------------------------------------------- 2. discount groups
 def sync_discount_groups(client):
     """Discount Groups — a percentage for a partner over an item group."""
-    entity = client.find_entity("discount", "group") or client.find_entity("discountgroup")
+    entity = (client.probe_entity(("DiscountGroups", "BPDiscountGroups", "ItemDiscountGroups"))
+              or client.find_entity("discount", "group"))
     if not entity:
         return "discount groups: skipped (no matching entity on this SAP install)"
     rows = client.get_all(entity)
@@ -363,9 +364,10 @@ def sync_period_volume(client):
     """Period and Volume Discounts — date ranges and quantity breaks on a
     price list, below discount groups in SAP's order."""
     price_lists = _price_list_map(client)
-    entity = (client.find_entity("period", "volume")
-              or client.find_entity("volumediscount")
-              or client.find_entity("perioddiscount"))
+    entity = (client.probe_entity((
+                  "PeriodAndVolumeDiscount", "PeriodAndVolumeDiscounts",
+                  "VolumeDiscounts", "PeriodDiscounts"))
+              or client.find_entity("period", "volume"))
     if not entity:
         return "period/volume: skipped (no matching entity on this SAP install)"
     rows = client.get_all(entity)
