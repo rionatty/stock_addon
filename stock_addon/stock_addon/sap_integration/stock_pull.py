@@ -32,6 +32,25 @@ from stock_addon.stock_addon.sap_integration.connection import (
 )
 
 
+# The posted stock transfer (OWTR) is "StockTransfers" on most B1
+# installs and "InventoryTransfers" on some. Resolve it against the
+# Service Layer's own metadata rather than guessing — and never pick the
+# *Request* entity (OWTQ), which is what we PUSH to, not pull from.
+PREFERRED_TRANSFER_ENTITIES = ("StockTransfers", "InventoryTransfers")
+
+
+def _transfer_entity(client):
+    available = set(client.entity_sets())
+    for name in PREFERRED_TRANSFER_ENTITIES:
+        if name in available:
+            return name
+    for name in sorted(available):
+        lowered = name.lower()
+        if "transfer" in lowered and "request" not in lowered and "draft" not in lowered:
+            return name
+    return None
+
+
 def _ensure_batch(item_code, batch_number):
     """Return the ERPNext Batch name for a SAP batch number, creating it
     if needed."""
@@ -129,12 +148,18 @@ def pull_van_transfers(triggered_by="manual"):
 
     try:
         client = SAPClient(settings)
+        entity = _transfer_entity(client)
+        if not entity:
+            message = _("No stock-transfer entity found on this SAP install — "
+                        "run 'Discover SAP Entities' to see what it exposes.")
+            log_sap("Pull", "Failed", "InventoryTransfers", message=message)
+            return message
         last = cint(settings.last_transfer_docentry)
 
         if not last:
             # First run after enabling: baseline to the newest SAP transfer so
             # we never replay the company's entire historical transfer log.
-            newest = client.get("InventoryTransfers", params={
+            newest = client.get(entity, params={
                 "$select": "DocEntry", "$orderby": "DocEntry desc", "$top": 1,
             }).get("value") or []
             baseline = cint(newest[0]["DocEntry"]) if newest else 0
@@ -144,13 +169,14 @@ def pull_van_transfers(triggered_by="manual"):
                 "Baseline set at SAP transfer DocEntry {0} — only transfers created "
                 "from now on will be pulled."
             ).format(baseline)
-            log_sap("Pull", "Success", "InventoryTransfers", message=message)
+            log_sap("Pull", "Success", entity, message=message)
             return message
 
-        transfers = client.get_all("InventoryTransfers", params={
+        # no $select — field names differ between B1 versions and one bad
+        # name fails the whole request (the lesson from PriceLists)
+        transfers = client.get_all(entity, params={
             "$filter": f"DocEntry gt {last}",
             "$orderby": "DocEntry asc",
-            "$select": "DocEntry,DocNum,DocDate,FromWarehouse,ToWarehouse,Comments,StockTransferLines",
         })
 
         pulled = skipped = failed = 0
@@ -170,7 +196,7 @@ def pull_van_transfers(triggered_by="manual"):
                 continue
             try:
                 se = _make_stock_entry(transfer, van_lines, code_to_erp, settings)
-                log_sap("Pull", "Success", "InventoryTransfers", "Stock Entry", se.name,
+                log_sap("Pull", "Success", entity, "Stock Entry", se.name,
                         entry, f"SAP transfer #{transfer.get('DocNum')} → {se.name}")
                 pulled += 1
                 frappe.db.commit()
@@ -178,7 +204,7 @@ def pull_van_transfers(triggered_by="manual"):
                     new_mark = entry
             except Exception:
                 frappe.db.rollback()
-                log_sap("Pull", "Failed", "InventoryTransfers", "Stock Entry", None,
+                log_sap("Pull", "Failed", entity, "Stock Entry", None,
                         entry, frappe.get_traceback()[-2000:])
                 failed += 1
                 frappe.db.commit()
@@ -198,7 +224,7 @@ def pull_van_transfers(triggered_by="manual"):
         # logs when something actually happened
         if triggered_by == "manual" or pulled or failed:
             log_sap("Pull", "Failed" if failed else "Success",
-                    "InventoryTransfers", message=summary)
+                    entity, message=summary)
         return summary
     finally:
         frappe.cache().delete_value("sap_van_pull_running")
