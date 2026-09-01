@@ -663,5 +663,18 @@
   "unique": 1,
   "description": "Set on Stock Entries auto-created from SAP Inventory Transfers (van stock pull). Unique so one SAP transfer can never be pulled twice.",
   "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Account-custom_sap_gl_account",
+  "dt": "Account",
+  "fieldname": "custom_sap_gl_account",
+  "label": "SAP G/L Account",
+  "fieldtype": "Data",
+  "insert_after": "account_number",
+  "in_standard_filter": 1,
+  "translatable": 0,
+  "description": "The matching G/L account code in SAP B1. Used whenever this account is posted to SAP — incoming payments, banking and expense journals. Leave empty to fall back to the ERPNext Account Number.",
+  "module": "Stock Addon"
  }
 ]

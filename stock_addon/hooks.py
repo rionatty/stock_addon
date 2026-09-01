@@ -214,6 +214,7 @@ fixtures = [
                     "Customer-custom_sap_cardcode",
                     "Customer-custom_sap_salesperson",
                     "Stock Entry-custom_sap_docentry",
+                    "Account-custom_sap_gl_account",
                     # Sales Pro mobile app custom fields
                     "Sales Person-custom_mapped_warehouse",
                     "Sales Person-custom_serving_warehouse",

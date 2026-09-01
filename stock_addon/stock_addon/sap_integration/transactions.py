@@ -61,14 +61,29 @@ def _cardcode(customer):
     return code
 
 
-def _account_code(account):
-    number = frappe.db.get_value("Account", account, "account_number")
-    if not number:
+def _account_code(account, required=True):
+    """The SAP G/L code for an ERPNext account.
+
+    "SAP G/L Account" on the account wins; the ERPNext Account Number is
+    the fallback for sites where the two charts already use the same
+    codes. Everything posted to SAP as a ledger line — incoming payments,
+    banking, expense journals — resolves its account through here.
+    """
+    if not account:
+        if required:
+            raise SAPError("No account given to resolve a SAP G/L code for.")
+        return None
+
+    values = frappe.db.get_value(
+        "Account", account, ["custom_sap_gl_account", "account_number"], as_dict=True
+    ) or {}
+    code = (values.get("custom_sap_gl_account") or values.get("account_number") or "").strip()
+    if not code and required:
         raise SAPError(
-            f"Account '{account}' has no Account Number. Set the SAP G/L code "
-            "as the Account Number on the ERPNext account."
+            f"Account '{account}' has no SAP G/L code. Set 'SAP G/L Account' on "
+            "the ERPNext account (or fill its Account Number to reuse that)."
         )
-    return number
+    return code or None
 
 
 def _stamp(doc, status, docentry=None, docnum=None):
@@ -236,18 +251,36 @@ def on_material_request_submit(doc, method=None):
 # --------------------------------------------------- incoming payments
 def push_payment_entry_doc(doc):
     settings = get_settings()
-    if not settings.sap_cash_account:
+
+    # The account the money actually landed in — each route/van has its
+    # own cash account and banking has its own bank account, so the SAP
+    # posting must follow the ERPNext account rather than one global
+    # code. The setting is only the fallback for accounts not yet mapped.
+    account_code = _account_code(doc.get("paid_to"), required=False) or settings.sap_cash_account
+    if not account_code:
         raise SAPError(
-            "SAP Cash G/L Account Code is not set in SAP Integration Settings."
+            f"Account '{doc.get('paid_to')}' has no SAP G/L code, and no fallback "
+            "is set in SAP Integration Settings (SAP Cash G/L Account Code)."
         )
 
+    # SAP splits the payment by instrument: cash goes in CashAccount,
+    # anything through a bank goes in TransferAccount with the date and
+    # amount, or the document simply will not post.
+    is_bank = frappe.db.get_value("Account", doc.get("paid_to"), "account_type") == "Bank"
     payload = {
         "CardCode": _cardcode(doc.party),
         "DocDate": str(doc.posting_date),
-        "CashAccount": settings.sap_cash_account,
-        "CashSum": flt(doc.paid_amount),
         "Remarks": f"ERPNext {doc.name}"[:250],
     }
+    if is_bank:
+        payload["TransferAccount"] = account_code
+        payload["TransferSum"] = flt(doc.paid_amount)
+        payload["TransferDate"] = str(doc.get("reference_date") or doc.posting_date)
+        if doc.get("reference_no"):
+            payload["TransferReference"] = str(doc.reference_no)[:50]
+    else:
+        payload["CashAccount"] = account_code
+        payload["CashSum"] = flt(doc.paid_amount)
 
     # Apply against synced A/R invoices. Credit notes (is_return) and
     # invoices that never reached SAP are left out; if ANY reference is

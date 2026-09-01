@@ -203,10 +203,10 @@
    "label": "Push Expenses as Journal Vouchers"
   },
   {
-   "description": "SAP G/L account code used as the Cash Account on Incoming Payments.",
+   "description": "Fallback only. Payments post to the SAP G/L Account set on the ERPNext account the money went into; this is used when that account has no code yet.",
    "fieldname": "sap_cash_account",
    "fieldtype": "Data",
-   "label": "SAP Cash G/L Account Code"
+   "label": "SAP Cash G/L Account Code (Fallback)"
   },
   {
    "fieldname": "section_pull",
