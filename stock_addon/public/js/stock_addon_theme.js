@@ -21,10 +21,19 @@
 		});
 	};
 
+	// The navy workspace cockpit is opt-in: it repaints ERPNext's own
+	// workspace layout, which differs between versions, so the standard
+	// display is what ships unless the setting asks otherwise.
+	stock_addon.apply_cockpit = function (on) {
+		document.documentElement.classList.toggle("sa-cockpit", !!on);
+	};
+
 	function apply_boot_palette() {
-		if (frappe.boot && frappe.boot.stock_addon_theme) {
+		if (!frappe.boot) return;
+		if (frappe.boot.stock_addon_theme) {
 			stock_addon.apply_palette(frappe.boot.stock_addon_theme);
 		}
+		stock_addon.apply_cockpit(frappe.boot.stock_addon_workspace_cockpit);
 	}
 
 	apply_boot_palette();               // boot is usually already inlined
