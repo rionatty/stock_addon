@@ -136,6 +136,10 @@ after_migrate = [
     "stock_addon.stock_addon.client_scripts.install_journey_plan_form_script",
     "stock_addon.stock_addon.client_scripts.install_work_order_form_script",
     "stock_addon.stock_addon.client_scripts.remove_customer_list_script",
+    # Switch off leftover Client Scripts that call an uninstalled app
+    # (e.g. the old standalone "Batch Generation" script — that feature
+    # lives in this app now).
+    "stock_addon.stock_addon.client_scripts.disable_dead_client_scripts",
     # Standard GL: turn off add_total_row (the client-side footer doubled
     # Debit/Credit and summed the Running Balance into a meaningless number).
     "stock_addon.stock_addon.report_patches.disable_gl_footer_total",
