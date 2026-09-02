@@ -40,6 +40,7 @@ function sa_contrast_with_white(hex) {
 
 function sa_preview(frm) {
 	const root = document.documentElement;
+	root.classList.toggle("sa-cockpit", !!(frm.doc.enabled && frm.doc.workspace_cockpit));
 	Object.entries(SA_THEME_FIELDS).forEach(([fieldname, cssVar]) => {
 		const value = (frm.doc[fieldname] || "").trim();
 		if (frm.doc.enabled && value) {
@@ -52,6 +53,7 @@ function sa_preview(frm) {
 
 function sa_restore_saved() {
 	const root = document.documentElement;
+	root.classList.toggle("sa-cockpit", !!(frappe.boot && frappe.boot.stock_addon_workspace_cockpit));
 	const saved = (frappe.boot && frappe.boot.stock_addon_theme) || {};
 	Object.values(SA_THEME_FIELDS).forEach((cssVar) => root.style.removeProperty(cssVar));
 	Object.entries(saved).forEach(([cssVar, value]) => root.style.setProperty(cssVar, value));
@@ -141,6 +143,8 @@ const sa_handlers = {
 				if (frm.doc.enabled && value) palette[cssVar] = value;
 			});
 			frappe.boot.stock_addon_theme = palette;
+			frappe.boot.stock_addon_workspace_cockpit =
+				frm.doc.enabled && frm.doc.workspace_cockpit ? 1 : 0;
 		}
 		sa_show_contrast(frm);
 	},
@@ -148,6 +152,10 @@ const sa_handlers = {
 	enabled(frm) {
 		sa_preview(frm);
 		sa_show_contrast(frm);
+	},
+
+	workspace_cockpit(frm) {
+		sa_preview(frm);
 	},
 };
 

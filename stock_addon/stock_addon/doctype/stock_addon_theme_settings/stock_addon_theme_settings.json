@@ -6,6 +6,7 @@
  "field_order": [
   "enabled",
   "intro_html",
+  "workspace_cockpit",
   "section_chrome",
   "primary_navy",
   "section_header_colour",
@@ -37,6 +38,14 @@
    "options": "<p class=\"text-muted small\">Colours apply live as you pick them, so you can see the result before saving. Save to make them permanent for everyone; use <b>Reset to Defaults</b> to go back to the shipped palette.</p>"
   },
   {
+   "default": "0",
+   "depends_on": "enabled",
+   "description": "Repaints the workspace pages with a navy canvas and floating white tiles. Off by default: it overrides a lot of ERPNext's own workspace layout, which varies between versions \u2014 leave it off to keep the standard display.",
+   "fieldname": "workspace_cockpit",
+   "fieldtype": "Check",
+   "label": "Workspace Cockpit (navy canvas)"
+  },
+  {
    "depends_on": "enabled",
    "fieldname": "section_chrome",
    "fieldtype": "Section Break",
@@ -65,7 +74,7 @@
    "label": "Sidebar Background"
   },
   {
-   "description": "The top navbar — usually a step darker than the sidebar.",
+   "description": "The top navbar \u2014 usually a step darker than the sidebar.",
    "fieldname": "navbar_background",
    "fieldtype": "Color",
    "label": "Navbar Background"
@@ -88,7 +97,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "Bottom-right of the gradient — the lighter end.",
+   "description": "Bottom-right of the gradient \u2014 the lighter end.",
    "fieldname": "canvas_bottom",
    "fieldtype": "Color",
    "label": "Canvas (Bottom)"

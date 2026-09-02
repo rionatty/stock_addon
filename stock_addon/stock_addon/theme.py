@@ -73,7 +73,23 @@ def get_palette():
         return {}
 
 
+def workspace_cockpit_enabled():
+    """Is the (opt-in) navy workspace cockpit switched on?
+
+    It repaints ERPNext's own workspace layout wholesale, and that layout
+    differs between versions, so it stays off unless asked for.
+    """
+    try:
+        if not frappe.db.exists("DocType", "Stock Addon Theme Settings"):
+            return 0
+        settings = frappe.get_cached_doc("Stock Addon Theme Settings")
+        return 1 if (settings.get("enabled") and settings.get("workspace_cockpit")) else 0
+    except Exception:
+        return 0
+
+
 def boot_session(bootinfo):
     """extend_bootinfo hook — ship the palette with the desk boot so the
     colours are applied before first paint (no extra round trip)."""
     bootinfo.stock_addon_theme = get_palette()
+    bootinfo.stock_addon_workspace_cockpit = workspace_cockpit_enabled()
