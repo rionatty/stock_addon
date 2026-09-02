@@ -10,11 +10,24 @@ app_license = "mit"
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/stock_addon/css/stock_addon.css"
-# Desk-wide script: adds the uniform "Print PDF" button to the STANDARD
-# General Ledger query report (ERPNext owns that report's js, so we watch
-# the route instead). Plain asset path — no bench build needed.
-app_include_js = "/assets/stock_addon/js/general_ledger_report.js"
+# SAP Business One navy desk theme (ported from rionatty/Agricalt `twiga`).
+# Bundle file — requires `bench build --app stock_addon` after deploy.
+app_include_css = "stock_addon.bundle.css"
+# Desk-wide scripts (plain asset paths — no bench build needed):
+#  - general_ledger_report.js: uniform "Print PDF" button on the STANDARD
+#    General Ledger query report (ERPNext owns that report's js, so we
+#    watch the route instead)
+#  - stock_addon_theme.js: colour overrides + status indicator colours
+#  - form_sidebar_toggle.js: collapse/expand the right-hand form panel
+app_include_js = [
+    "/assets/stock_addon/js/general_ledger_report.js",
+    "/assets/stock_addon/js/stock_addon_theme.js",
+    "/assets/stock_addon/js/form_sidebar_toggle.js",
+]
+
+# Ship the desk colour overrides ("Stock Addon Theme Settings") with the
+# session boot so they are applied before first paint.
+extend_bootinfo = "stock_addon.stock_addon.theme.boot_session"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/stock_addon/css/stock_addon.css"
