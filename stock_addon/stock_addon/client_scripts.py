@@ -74,3 +74,41 @@ def install_work_order_form_script():
         view     = "Form",
         filename = "work_order.js",
     )
+
+
+def disable_dead_client_scripts():
+    """Switch off Client Scripts that call an app which is not installed.
+
+    Batch generation lives in THIS app, but sites migrated from an
+    earlier setup can still carry the old standalone script — e.g. a
+    "Batch Generation" script calling
+    ``batch_generation.batchapi.generate_batch_for_work_order``. With
+    that app gone the button only ever produces "App batch_generation is
+    not installed", and it sits next to our working one.
+
+    Only scripts whose target app is genuinely absent are touched, and
+    they are disabled rather than deleted, so re-installing the app and
+    flipping ``enabled`` back on restores them.
+    """
+    import re
+
+    installed = set(frappe.get_installed_apps())
+    changed = []
+
+    for name in frappe.get_all("Client Script", filters={"enabled": 1}, pluck="name"):
+        script = frappe.db.get_value("Client Script", name, "script") or ""
+        # dotted paths passed to frappe.call / frappe.xcall
+        targets = set(re.findall(r'method\s*:\s*["\']([a-zA-Z0-9_]+)\.', script))
+        targets |= set(re.findall(r'x?call\(\s*["\']([a-zA-Z0-9_]+)\.', script))
+        missing = {app for app in targets if app not in installed and app != "frappe"}
+        if not missing:
+            continue
+        frappe.db.set_value("Client Script", name, "enabled", 0, update_modified=False)
+        changed.append(f"{name} (calls {', '.join(sorted(missing))})")
+
+    if changed:
+        frappe.db.commit()
+        frappe.log_error(
+            "Disabled Client Scripts that call uninstalled apps:\n" + "\n".join(changed),
+            "Stock Addon: dead Client Scripts",
+        )
