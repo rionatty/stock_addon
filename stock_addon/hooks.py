@@ -140,6 +140,8 @@ after_migrate = [
     # (e.g. the old standalone "Batch Generation" script — that feature
     # lives in this app now).
     "stock_addon.stock_addon.client_scripts.disable_dead_client_scripts",
+    # Default list ordering (Material Request: newest first, by date+time)
+    "stock_addon.stock_addon.list_settings.set_default_list_sort",
     # Standard GL: turn off add_total_row (the client-side footer doubled
     # Debit/Credit and summed the Running Balance into a meaningless number).
     "stock_addon.stock_addon.report_patches.disable_gl_footer_total",
