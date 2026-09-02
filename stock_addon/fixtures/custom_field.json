@@ -7,8 +7,8 @@
   "label": "Sales Price",
   "fieldtype": "Currency",
   "insert_after": "basic_rate",
-  "in_list_view": 1,
-  "description": "Unit selling price per STOCK UoM. Auto-filled from the source Material Request line or the default selling Item Price; can be overridden.",
+  "in_list_view": 0,
+  "description": "Unit selling price per STOCK UoM. Auto-filled from the source Material Request line or the default selling Item Price; can be overridden. Not shown as a grid column by default: custom columns evict standard ones (Source/Target Warehouse on transfers). Add it via the grid's column settings if wanted.",
   "module": "Stock Addon"
  },
  {
@@ -53,10 +53,10 @@
   "label": "Total Amount (Sales Price)",
   "fieldtype": "Currency",
   "insert_after": "custom_sales_price",
-  "in_list_view": 1,
+  "in_list_view": 0,
   "read_only": 1,
   "no_copy": 1,
-  "description": "Sales Price x stock qty for this row (computed).",
+  "description": "Sales Price x stock qty for this row (computed). Not shown as a grid column by default: custom columns evict standard ones (Source/Target Warehouse on transfers). Add it via the grid's column settings if wanted.",
   "module": "Stock Addon"
  },
  {
@@ -96,7 +96,7 @@
   "read_only": 1,
   "in_list_view": 0,
   "in_standard_filter": 1,
-  "description": "Weekday (Monday–Sunday) denormalized from the active Journey Plan on submit. Used by the mobile app to resolve today's route.",
+  "description": "Weekday (Monday\u2013Sunday) denormalized from the active Journey Plan on submit. Used by the mobile app to resolve today's route.",
   "module": "Stock Addon"
  },
  {
@@ -196,9 +196,9 @@
   "label": "Van Request",
   "fieldtype": "Select",
   "options": "\nYes\nNo",
-  "insert_after": "material_request_type",
+  "insert_after": "set_warehouse",
   "in_standard_filter": 1,
-  "description": "Marks this Material Request as a van stock request raised from the Sales Pro mobile app.",
+  "description": "Marks this Material Request as a van stock request raised from the Sales Pro mobile app. Placed after Set Target Warehouse so the transfer warehouse fields keep their position.",
   "module": "Stock Addon"
  },
  {
@@ -280,8 +280,8 @@
   "label": "Sales Price",
   "fieldtype": "Currency",
   "insert_after": "rate",
-  "in_list_view": 1,
-  "description": "Unit selling price per line. Sent/read by the Sales Pro mobile app.",
+  "in_list_view": 0,
+  "description": "Unit selling price per line. Sent/read by the Sales Pro mobile app. Not shown as a grid column by default: custom columns evict standard ones (Source/Target Warehouse on transfers). Add it via the grid's column settings if wanted.",
   "module": "Stock Addon"
  },
  {
@@ -292,8 +292,8 @@
   "label": "Sales Price",
   "fieldtype": "Currency",
   "insert_after": "rate",
-  "in_list_view": 1,
-  "description": "Unit selling price per line. Sent/read by the Sales Pro mobile app.",
+  "in_list_view": 0,
+  "description": "Unit selling price per line. Sent/read by the Sales Pro mobile app. Not shown as a grid column by default: custom columns evict standard ones (Source/Target Warehouse on transfers). Add it via the grid's column settings if wanted.",
   "module": "Stock Addon"
  },
  {
