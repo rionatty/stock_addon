@@ -39,6 +39,7 @@
   "pull_van_transfers",
   "van_request_udf",
   "van_request_udf_value",
+  "pull_interval_seconds",
   "receipt_mode",
   "column_break_pull",
   "default_source_warehouse",
@@ -260,6 +261,13 @@
    "fieldname": "van_request_udf_value",
    "fieldtype": "Data",
    "label": "Van Request UDF Value"
+  },
+  {
+   "default": "15",
+   "description": "How often to check SAP, in seconds. Frappe's scheduler only fires once a minute, so anything below 60 makes that job poll repeatedly within its minute \u2014 15 means a transfer posted in SAP appears here within about 15 seconds. The job holds a worker while it polls; set 60 for a single check per minute.",
+   "fieldname": "pull_interval_seconds",
+   "fieldtype": "Int",
+   "label": "Pull Interval (Seconds)"
   },
   {
    "default": "Material Receipt",
