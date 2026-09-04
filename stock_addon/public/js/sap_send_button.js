@@ -13,6 +13,7 @@
 	// Mirrors the on_submit conditions in sap_integration/transactions.py.
 	const PUSHABLE = {
 		"Sales Invoice": (doc) => doc.docstatus === 1,
+		"Sales Order": (doc) => doc.docstatus === 1,
 		"Material Request": (doc) =>
 			doc.docstatus === 1 && doc.material_request_type === "Material Transfer",
 		"Payment Entry": (doc) =>

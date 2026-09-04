@@ -26,6 +26,7 @@
   "customer_code_prefix",
   "auto_sync_masters",
   "section_push",
+  "sales_order_push",
   "push_sales_invoices",
   "push_credit_notes",
   "push_transfer_requests",
@@ -48,7 +49,7 @@
  "fields": [
   {
    "default": "0",
-   "description": "Master switch — nothing is pushed or pulled while this is off.",
+   "description": "Master switch \u2014 nothing is pushed or pulled while this is off.",
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enable SAP Integration"
@@ -93,7 +94,7 @@
   {
    "fieldname": "section_masters",
    "fieldtype": "Section Break",
-   "label": "Master Data Sync (SAP → ERPNext)"
+   "label": "Master Data Sync (SAP \u2192 ERPNext)"
   },
   {
    "default": "1",
@@ -173,7 +174,15 @@
   {
    "fieldname": "section_push",
    "fieldtype": "Section Break",
-   "label": "Transaction Push (ERPNext → SAP)"
+   "label": "Transaction Push (ERPNext \u2192 SAP)"
+  },
+  {
+   "default": "On Submit",
+   "description": "When a Sales Order reaches SAP. On Submit sends it the moment it is submitted. Manual Only sends nothing automatically \u2014 use the 'Send to SAP' button on the order, for teams that confirm an order before it becomes an order in SAP. Off never sends it.",
+   "fieldname": "sales_order_push",
+   "fieldtype": "Select",
+   "label": "Send Sales Orders",
+   "options": "On Submit\nManual Only\nOff"
   },
   {
    "default": "1",
@@ -189,7 +198,7 @@
   },
   {
    "default": "1",
-   "description": "Van stock requests (Material Request → SAP Inventory Transfer Request).",
+   "description": "Van stock requests (Material Request \u2192 SAP Inventory Transfer Request).",
    "fieldname": "push_transfer_requests",
    "fieldtype": "Check",
    "label": "Push Stock Transfer Requests"
@@ -227,7 +236,7 @@
   {
    "fieldname": "section_pull",
    "fieldtype": "Section Break",
-   "label": "Van Stock Pull (SAP → ERPNext)"
+   "label": "Van Stock Pull (SAP \u2192 ERPNext)"
   },
   {
    "default": "1",
@@ -279,7 +288,7 @@
    "label": "Tax Mapping"
   },
   {
-   "description": "Filled by 'Sync Taxes'. Link each SAP code to the ERPNext Sales Taxes template it corresponds to — pushed invoice lines then carry the SAP VatGroup.",
+   "description": "Filled by 'Sync Taxes'. Link each SAP code to the ERPNext Sales Taxes template it corresponds to \u2014 pushed invoice lines then carry the SAP VatGroup.",
    "fieldname": "tax_mappings",
    "fieldtype": "Table",
    "label": "Tax Mappings",

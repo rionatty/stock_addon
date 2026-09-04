@@ -206,6 +206,9 @@ fixtures = [
                     "Work Order-custom_expiry_date",
                     "Batch-custom_batch_status",
                     "Quality Inspection-custom_batch_status",
+                    "Sales Order-custom_sap_sync_status",
+                    "Sales Order-custom_sap_docentry",
+                    "Sales Order-custom_sap_docnum",
                     "Sales Invoice-custom_sap_sync_status",
                     "Sales Invoice-custom_sap_docentry",
                     "Sales Invoice-custom_sap_docnum",
@@ -339,6 +342,10 @@ doc_events = {
     "Payment Entry": {
         # SAP: incoming customer payments push on submit
         "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_payment_entry_submit",
+    },
+    "Sales Order": {
+        # SAP: only when "Send Sales Orders" is On Submit — the handler checks
+        "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_sales_order_submit",
     },
     "Sales Person": {
         # On creation, auto-provision a Cost Center + Warehouse named after

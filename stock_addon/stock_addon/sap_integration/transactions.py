@@ -5,6 +5,8 @@
 
 Wired on on_submit (hooks.py), all guarded by SAP Integration Settings:
 
+  Sales Order              → /Orders          (timing set by "Send Sales
+                             Orders": On Submit / Manual Only / Off)
   Sales Invoice            → /Invoices        (is_return → /CreditNotes)
   Material Request (MT)    → /InventoryTransferRequests
   Payment Entry (Receive)  → /IncomingPayments
@@ -293,6 +295,65 @@ def push_sales_invoice_doc(doc):
     return _push(doc, endpoint, payload, label)
 
 
+# ---------------------------------------------------------- sales order
+def push_sales_order_doc(doc):
+    """Sales Order -> SAP Order (ORDR).
+
+    Same line rules as the invoice: gross price when the ERPNext rate
+    already includes VAT, net otherwise — otherwise SAP applies its tax
+    code a second time and the SAP order totals more than the ERPNext one.
+    """
+    _assert_items_in_sap(doc)
+    vat_group = _vat_group_for(doc)
+    tax_inclusive = _is_tax_inclusive(doc)
+
+    lines = []
+    for item in doc.items:
+        line = {
+            "ItemCode": item.item_code,
+            "Quantity": abs(flt(item.qty)),
+        }
+        if tax_inclusive:
+            line["PriceAfterVAT"] = flt(item.rate)
+        else:
+            line["UnitPrice"] = flt(item.get("net_rate") or item.rate)
+        if vat_group:
+            line["VatGroup"] = vat_group
+        warehouse = _sap_warehouse(item.get("warehouse"))
+        if warehouse:
+            line["WarehouseCode"] = warehouse
+        # per-line promise date; SAP keeps its own line ship dates
+        if item.get("delivery_date"):
+            line["ShipDate"] = str(item.delivery_date)
+        lines.append(line)
+
+    payload = {
+        "CardCode": _cardcode(doc.customer),
+        "DocDate": str(doc.transaction_date),
+        # DocDueDate on an order is the delivery promise, not a payment date
+        "DocDueDate": str(doc.get("delivery_date") or doc.transaction_date),
+        "NumAtCard": doc.name,
+        "Comments": f"ERPNext {doc.name}"[:254],
+        "DocumentLines": lines,
+    }
+    # entity naming has bitten us three times — probe rather than assume
+    endpoint = SAPClient().probe_entity(("Orders", "SalesOrders")) or "Orders"
+    return _push(doc, endpoint, payload, _("Sales Order"))
+
+
+def sales_order_push_mode():
+    """When Sales Orders go to SAP: 'On Submit', 'Manual Only' or 'Off'."""
+    return (get_settings().get("sales_order_push") or "On Submit").strip()
+
+
+def on_sales_order_submit(doc, method=None):
+    if not integration_enabled():
+        return
+    if sales_order_push_mode() != "On Submit":
+        return          # Manual Only / Off — the button still decides
+    _guarded(push_sales_order_doc, doc, "Orders")
+
+
 def on_sales_invoice_submit(doc, method=None):
     flag = "push_credit_notes" if cint(doc.is_return) else "push_sales_invoices"
     if not integration_enabled(flag):
@@ -451,6 +512,7 @@ PUSHERS = {
     # doctype: (pusher, extra filters — never re-push cancelled/unposted
     # docs, and only docs of the kinds the on_submit hooks would push)
     "Sales Invoice": (push_sales_invoice_doc, {"docstatus": 1}),
+    "Sales Order": (push_sales_order_doc, {"docstatus": 1}),
     "Material Request": (push_material_request_doc,
                          {"docstatus": 1, "material_request_type": "Material Transfer"}),
     "Payment Entry": (push_payment_entry_doc,
@@ -495,6 +557,22 @@ def _flag_for(doc):
     return PUSH_FLAGS.get(doc.doctype)
 
 
+def _blocked_by_settings(doc):
+    """Reason this document may not be pushed at all, or None.
+
+    Sales Orders use a mode rather than a checkbox: "Manual Only" must
+    still allow the button, so it cannot be modelled as a plain flag.
+    """
+    if doc.doctype == "Sales Order":
+        if sales_order_push_mode() == "Off":
+            return _("Sending Sales Orders to SAP is switched off in SAP Integration Settings.")
+        return None
+    flag = _flag_for(doc)
+    if flag and not cint(get_settings().get(flag)):
+        return _("Pushing {0} is switched off in SAP Integration Settings.").format(_(doc.doctype))
+    return None
+
+
 @frappe.whitelist()
 def push_document(doctype, name, force=0):
     """Push one document on demand — the "Send to SAP" button on the
@@ -508,11 +586,9 @@ def push_document(doctype, name, force=0):
 
     doc = frappe.get_doc(doctype, name)
 
-    flag = _flag_for(doc)
-    if flag and not cint(get_settings().get(flag)):
-        frappe.throw(
-            _("Pushing {0} is switched off in SAP Integration Settings.").format(_(doctype))
-        )
+    blocked = _blocked_by_settings(doc)
+    if blocked:
+        frappe.throw(blocked)
 
     # Guard against creating a second document in SAP by accident.
     if doc.get("custom_sap_sync_status") == "Synced" and not cint(force):
@@ -562,6 +638,8 @@ def push_pending(limit=100):
     results = []
     for doctype, (pusher, extra_filters) in PUSHERS.items():
         if doctype in PUSH_FLAGS and not cint(settings.get(PUSH_FLAGS[doctype])):
+            continue
+        if doctype == "Sales Order" and sales_order_push_mode() == "Off":
             continue
         if doctype == "Sales Invoice" and not (
             cint(settings.get("push_sales_invoices")) or cint(settings.get("push_credit_notes"))
