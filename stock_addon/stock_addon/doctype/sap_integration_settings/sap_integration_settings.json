@@ -37,6 +37,8 @@
   "sap_cash_account",
   "section_pull",
   "pull_van_transfers",
+  "van_request_udf",
+  "van_request_udf_value",
   "receipt_mode",
   "column_break_pull",
   "default_source_warehouse",
@@ -244,6 +246,20 @@
    "fieldname": "pull_van_transfers",
    "fieldtype": "Check",
    "label": "Pull Van Transfers"
+  },
+  {
+   "default": "U_VanRequest",
+   "description": "SAP user field that marks a transfer as van stock. It is set on every transfer request pushed from here, and the pull fetches transfers by it instead of by DocEntry \u2014 so stock arrives without anyone entering a DocEntry. Leave EMPTY to fall back to the DocEntry high-water mark.",
+   "fieldname": "van_request_udf",
+   "fieldtype": "Data",
+   "label": "Van Request UDF (SAP)"
+  },
+  {
+   "default": "Yes",
+   "description": "The value written to that field, and matched when fetching (e.g. Yes, or Y).",
+   "fieldname": "van_request_udf_value",
+   "fieldtype": "Data",
+   "label": "Van Request UDF Value"
   },
   {
    "default": "Material Receipt",

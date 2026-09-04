@@ -387,6 +387,15 @@ def push_material_request_doc(doc):
         "Comments": f"ERPNext {doc.name} — {doc.get('custom_narration') or 'van stock request'}"[:250],
         "StockTransferLines": lines,
     }
+
+    # Mark it in SAP as van stock. The pull then finds the resulting
+    # transfer by this flag rather than by DocEntry, so stock comes back
+    # without anyone having to know a document number.
+    settings = get_settings()
+    udf = (settings.get("van_request_udf") or "").strip()
+    if udf:
+        payload[udf] = (settings.get("van_request_udf_value") or "Yes").strip()
+
     return _push(doc, "InventoryTransferRequests", payload, _("Stock Transfer Request"))
 
 

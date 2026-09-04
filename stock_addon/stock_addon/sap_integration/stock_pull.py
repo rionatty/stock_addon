@@ -15,9 +15,17 @@ Modes (SAP Integration Settings → Receipt Mode):
     keeps ERPNext's main-warehouse balance in step, but requires that
     stock to exist in ERPNext.
 
-De-duplication: each pulled transfer stamps its SAP DocEntry on the
-Stock Entry (custom_sap_docentry); the high-water mark is kept in
-Settings.last_transfer_docentry.
+Finding the transfers:
+  - Preferred — by the van flag (a SAP user field, e.g. U_VanRequest).
+    Every transfer request pushed from here is stamped with it, so the
+    pull matches on what the document IS. No DocEntry needs to be known,
+    and nothing can get stuck behind a watermark.
+  - Fallback (flag not configured, or SAP rejects it) — DocEntry above a
+    high-water mark, baselined on first run so history is not replayed.
+
+De-duplication is the same either way: each pulled transfer stamps its
+SAP DocEntry on the Stock Entry (custom_sap_docentry, unique), so a
+transfer is mirrored exactly once however it was found.
 """
 
 import frappe
@@ -172,28 +180,56 @@ def pull_van_transfers(triggered_by="manual"):
             return message
         last = cint(settings.last_transfer_docentry)
 
-        if not last:
-            # First run after enabling: baseline to the newest SAP transfer so
-            # we never replay the company's entire historical transfer log.
-            newest = client.get(entity, params={
-                "$select": "DocEntry", "$orderby": "DocEntry desc", "$top": 1,
-            }).get("value") or []
-            baseline = cint(newest[0]["DocEntry"]) if newest else 0
-            frappe.db.set_single_value("SAP Integration Settings", "last_transfer_docentry", baseline)
-            frappe.db.commit()
-            message = _(
-                "Baseline set at SAP transfer DocEntry {0} — only transfers created "
-                "from now on will be pulled."
-            ).format(baseline)
-            log_sap("Pull", "Success", entity, message=message)
-            return message
+        # Preferred: fetch by the van flag SAP itself carries. Transfers
+        # pushed from here are stamped with it, so the pull finds them by
+        # WHAT THEY ARE rather than by a document number somebody has to
+        # know. Already-pulled ones are skipped on their unique DocEntry
+        # stamp, so there is no watermark to get stuck behind.
+        udf = (settings.get("van_request_udf") or "").strip()
+        udf_value = (settings.get("van_request_udf_value") or "Yes").strip()
+        by_flag = False
+        transfers = None
 
-        # no $select — field names differ between B1 versions and one bad
-        # name fails the whole request (the lesson from PriceLists)
-        transfers = client.get_all(entity, params={
-            "$filter": f"DocEntry gt {last}",
-            "$orderby": "DocEntry asc",
-        })
+        if udf:
+            try:
+                transfers = client.get_all(entity, params={
+                    "$filter": "{0} eq '{1}'".format(udf, udf_value.replace("'", "''")),
+                    "$orderby": "DocEntry asc",
+                })
+                by_flag = True
+            except Exception as e:
+                # a UDF that does not exist on this entity is a 400 — say so
+                # plainly and carry on with the watermark rather than dying
+                log_sap("Pull", "Failed", entity, message=(
+                    f"Van flag '{udf}' could not be used on {entity} ({str(e)[:200]}). "
+                    "Check the field name in SAP Integration Settings — falling back "
+                    "to the DocEntry high-water mark."))
+
+        if not by_flag:
+            if not last:
+                # First run after enabling: baseline to the newest SAP transfer
+                # so we never replay the company's entire historical log.
+                newest = client.get(entity, params={
+                    "$select": "DocEntry", "$orderby": "DocEntry desc", "$top": 1,
+                }).get("value") or []
+                baseline = cint(newest[0]["DocEntry"]) if newest else 0
+                frappe.db.set_single_value(
+                    "SAP Integration Settings", "last_transfer_docentry", baseline)
+                frappe.db.commit()
+                message = _(
+                    "Baseline set at SAP transfer DocEntry {0} — only transfers created "
+                    "from now on will be pulled. (Set a Van Request UDF to fetch by flag "
+                    "instead and avoid needing DocEntry at all.)"
+                ).format(baseline)
+                log_sap("Pull", "Success", entity, message=message)
+                return message
+
+            # no $select — field names differ between B1 versions and one bad
+            # name fails the whole request (the lesson from PriceLists)
+            transfers = client.get_all(entity, params={
+                "$filter": f"DocEntry gt {last}",
+                "$orderby": "DocEntry asc",
+            })
 
         pulled = skipped = failed = 0
         new_mark, advance = last, True
@@ -207,7 +243,7 @@ def pull_van_transfers(triggered_by="manual"):
                 "Stock Entry", {"custom_sap_docentry": str(entry)}
             ):
                 skipped += 1
-                if advance:
+                if advance and not by_flag:
                     new_mark = entry
                 continue
             try:
@@ -216,7 +252,7 @@ def pull_van_transfers(triggered_by="manual"):
                         entry, f"SAP transfer #{transfer.get('DocNum')} → {se.name}")
                 pulled += 1
                 frappe.db.commit()
-                if advance:
+                if advance and not by_flag:
                     new_mark = entry
             except Exception:
                 frappe.db.rollback()
@@ -229,12 +265,14 @@ def pull_van_transfers(triggered_by="manual"):
                 # by their custom_sap_docentry stamp)
                 advance = False
 
-        if new_mark > last:
+        if not by_flag and new_mark > last:
             frappe.db.set_single_value("SAP Integration Settings", "last_transfer_docentry", new_mark)
             frappe.db.commit()
 
-        summary = _("Van stock pull: {0} pulled, {1} skipped, {2} failed (checked {3} SAP transfers)").format(
-            pulled, skipped, failed, len(transfers)
+        how = _("matched by van flag") if by_flag else _("by DocEntry watermark")
+        summary = _("Van stock pull ({4}): {0} pulled, {1} skipped, {2} failed "
+                    "(checked {3} SAP transfers)").format(
+            pulled, skipped, failed, len(transfers), how
         )
         # manual runs always leave a visible trace; the scheduled and
         # on-demand runs only log when something actually happened, or the
