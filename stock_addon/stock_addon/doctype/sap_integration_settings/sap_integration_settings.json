@@ -40,6 +40,7 @@
   "van_request_udf",
   "van_request_udf_value",
   "pull_interval_seconds",
+  "pull_scan_limit",
   "receipt_mode",
   "column_break_pull",
   "default_source_warehouse",
@@ -270,6 +271,13 @@
    "label": "Pull Interval (Seconds)"
   },
   {
+   "default": "100",
+   "description": "How many of SAP's most recent transfers to examine each run when the van flag is not available. Anything targeting a van warehouse and not already pulled is brought in, so nothing gets stranded.",
+   "fieldname": "pull_scan_limit",
+   "fieldtype": "Int",
+   "label": "Transfers to Scan"
+  },
+  {
    "default": "Material Receipt",
    "description": "Material Receipt: stock appears directly in the van warehouse. Material Transfer: moves from the source warehouse (needs ERPNext stock there).",
    "fieldname": "receipt_mode",
@@ -289,10 +297,10 @@
    "options": "Warehouse"
   },
   {
-   "description": "High-water mark of processed SAP transfers. Managed automatically; lower it (or use 'Pull From DocEntry') to re-pull transfers posted before the pull was first switched on. Already-mirrored transfers are skipped, so rewinding cannot duplicate stock.",
+   "description": "Set once when the pull first runs, so enabling the integration does not replay SAP's whole transfer history. Transfers above it are pulled; it does NOT advance, so nothing can be stranded behind it. Lower it to reach further back.",
    "fieldname": "last_transfer_docentry",
    "fieldtype": "Int",
-   "label": "Last Transfer DocEntry"
+   "label": "Start From DocEntry"
   },
   {
    "fieldname": "section_mapping",
