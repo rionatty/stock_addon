@@ -392,6 +392,14 @@ def push_material_request_doc(doc):
     # transfer by this flag rather than by DocEntry, so stock comes back
     # without anyone having to know a document number.
     settings = get_settings()
+
+    # The correlation key. SAP copies this onto the Stock Transfer when the
+    # request is converted, so the pull can find exactly the transfers that
+    # originated here — which a flag living only on the request cannot do.
+    reference_udf = (settings.get("integration_number_udf") or "").strip()
+    if reference_udf:
+        payload[reference_udf] = doc.name
+
     udf = (settings.get("van_request_udf") or "").strip()
     if udf:
         payload[udf] = (settings.get("van_request_udf_value") or "Yes").strip()

@@ -37,6 +37,7 @@
   "sap_cash_account",
   "section_pull",
   "pull_van_transfers",
+  "integration_number_udf",
   "van_request_udf",
   "van_request_udf_value",
   "pull_interval_seconds",
@@ -248,6 +249,13 @@
    "fieldname": "pull_van_transfers",
    "fieldtype": "Check",
    "label": "Pull Van Transfers"
+  },
+  {
+   "default": "U_IntegrationNumber",
+   "description": "SAP user field that carries the ERPNext document name onto the transfer request, e.g. MAT-MR-2026-00009. Because SAP copies it to the Stock Transfer, the pull can find exactly the transfers that came from here \u2014 no DocEntry, and it works where a flag added only to the request does not. This is the preferred route; leave empty to fall back to the van flag or a recent scan.",
+   "fieldname": "integration_number_udf",
+   "fieldtype": "Data",
+   "label": "Integration Number UDF (SAP)"
   },
   {
    "default": "U_VanRequest",

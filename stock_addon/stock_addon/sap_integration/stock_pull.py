@@ -101,6 +101,16 @@ def _make_stock_entry(transfer, van_lines, code_to_erp, settings):
     se.set_posting_time = 1
     se.custom_sap_docentry = str(transfer["DocEntry"])
 
+    # Show where this came from. The integration number is the ERPNext
+    # request that started it, so the round trip is legible from here
+    # rather than only inside SAP.
+    reference_udf = (settings.get("integration_number_udf") or "").strip()
+    origin = (transfer.get(reference_udf) or "").strip() if reference_udf else ""
+    se.remarks = _("SAP transfer #{0}{1}").format(
+        transfer.get("DocNum") or transfer.get("DocEntry"),
+        _(" — from {0}").format(origin) if origin else "",
+    )
+
     for line in van_lines:
         item_code = line.get("ItemCode")
         if not frappe.db.exists("Item", item_code):
@@ -197,19 +207,44 @@ def pull_van_transfers(triggered_by="manual"):
         #    stored DocEntry is a fixed go-live floor, so a transfer that
         #    is not pulled on one run can still be pulled on the next.
         #    Already-pulled ones are excluded by their unique DocEntry.
+        by_flag = False
+        matched_on = None
+        transfers = None
+
+        # 0. Preferred: the integration number. Every transfer request
+        #    pushed from here carries the ERPNext document name, and SAP
+        #    copies it onto the Stock Transfer — so this finds precisely
+        #    the transfers that originated here, whatever their DocEntry.
+        reference_udf = (settings.get("integration_number_udf") or "").strip()
+        reference_dead_key = f"sap_ref_udf_unusable:{entity}:{reference_udf}"
+        if reference_udf and not frappe.cache().get_value(reference_dead_key):
+            try:
+                transfers = client.get_all(entity, params={
+                    "$filter": f"{reference_udf} ne ''",
+                    "$orderby": "DocEntry asc",
+                })
+                by_flag = True
+                matched_on = _("matched by integration number")
+            except Exception as e:
+                frappe.cache().set_value(reference_dead_key, 1, expires_in_sec=600)
+                log_sap("Pull", "Failed", entity, message=(
+                    f"Integration number field '{reference_udf}' does not exist on {entity} "
+                    f"({str(e)[:200]}). Add the same user field to the Stock Transfer in SAP "
+                    "so it copies over from the request, or clear it in SAP Integration "
+                    "Settings. Falling back — van stock still syncs."))
+
         udf = (settings.get("van_request_udf") or "").strip()
         udf_value = (settings.get("van_request_udf_value") or "Yes").strip()
         udf_dead_key = f"sap_van_udf_unusable:{entity}:{udf}"
-        by_flag = False
-        transfers = None
 
-        if udf and not frappe.cache().get_value(udf_dead_key):
+        if not by_flag and udf and not frappe.cache().get_value(udf_dead_key):
             try:
                 transfers = client.get_all(entity, params={
                     "$filter": "{0} eq '{1}'".format(udf, udf_value.replace("'", "''")),
                     "$orderby": "DocEntry asc",
                 })
                 by_flag = True
+                matched_on = _("matched by van flag")
             except Exception as e:
                 frappe.cache().set_value(udf_dead_key, 1, expires_in_sec=600)
                 log_sap("Pull", "Failed", entity, message=(
@@ -275,7 +310,7 @@ def pull_van_transfers(triggered_by="manual"):
                 # nothing to advance: the next run re-examines this transfer
                 # and retries it once the cause is fixed
 
-        how = _("matched by van flag") if by_flag else _("scanning recent transfers")
+        how = matched_on or _("scanning recent transfers")
         summary = _("Van stock pull ({4}): {0} pulled, {1} skipped, {2} failed "
                     "(checked {3} SAP transfers)").format(
             pulled, skipped, failed, len(transfers), how
