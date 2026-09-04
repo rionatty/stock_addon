@@ -15,13 +15,22 @@ Modes (SAP Integration Settings → Receipt Mode):
     keeps ERPNext's main-warehouse balance in step, but requires that
     stock to exist in ERPNext.
 
-Finding the transfers:
-  - Preferred — by the van flag (a SAP user field, e.g. U_VanRequest).
-    Every transfer request pushed from here is stamped with it, so the
-    pull matches on what the document IS. No DocEntry needs to be known,
-    and nothing can get stuck behind a watermark.
-  - Fallback (flag not configured, or SAP rejects it) — DocEntry above a
-    high-water mark, baselined on first run so history is not replayed.
+Finding the transfers, first route that works:
+  1. The integration number (e.g. U_IntegrationNumber) — every transfer
+     request pushed from here carries its ERPNext name, and SAP copies
+     that onto the posted transfer, so this matches exactly the transfers
+     that originated here. Needs the user field on BOTH documents in SAP.
+  2. The van flag (e.g. U_VanRequest) — only usable if that field exists
+     on the posted transfer too, which on many installs it does not.
+  3. A bounded scan of recent transfers above a fixed floor, keeping
+     anything bound for a van warehouse.
+
+No DocEntry ever has to be typed in, and the floor does not advance, so a
+transfer passed over on one run is still reachable on the next.
+
+'Check SAP User Fields' on the settings screen reports which of those
+fields SAP actually has, on each document — the silent half-configuration
+(field on the request but not the transfer) is otherwise invisible.
 
 De-duplication is the same either way: each pulled transfer stamps its
 SAP DocEntry on the Stock Entry (custom_sap_docentry, unique), so a
@@ -370,6 +379,8 @@ def preview_transfers(limit=10):
         "$top": cint(limit) or 10,
     })
 
+    reference_udf = (settings.get("integration_number_udf") or "").strip()
+
     lines = [_("High-water mark is DocEntry {0} — only transfers above it are pulled.").format(mark), ""]
     for row in rows:
         entry = cint(row.get("DocEntry"))
@@ -388,13 +399,87 @@ def preview_transfers(limit=10):
             verdict = _("BELOW the mark — use 'Pull From DocEntry' with {0}").format(entry)
         else:
             verdict = _("would be pulled")
+        # Show whether SAP really carried the integration number across —
+        # the one fact that says if the correlation is working, and the
+        # thing you otherwise have to open SAP to see.
+        origin = (row.get(reference_udf) or "") if reference_udf else ""
+        origin_note = f" [{reference_udf}={origin or '(empty)'}]" if reference_udf else ""
+
         lines.append(
             f"DocEntry {entry} (DocNum {row.get('DocNum')}) {str(row.get('DocDate'))[:10]} "
-            f"-> {', '.join(targets) or 'no lines'} : {verdict}"
+            f"-> {', '.join(targets) or 'no lines'}{origin_note} : {verdict}"
         )
 
     summary = "\n".join(lines)
     log_sap("Pull", "Success", entity, message=summary[:9000])
+    return summary
+
+
+@frappe.whitelist()
+def check_integration_fields():
+    """Ask SAP whether the configured user fields really exist — on the
+    transfer request we push to AND on the stock transfer we pull from.
+
+    The integration number only works if SAP carries it across that
+    conversion, and nothing on the ERPNext side can see whether it does.
+    A field missing on either half fails silently: the number stays blank
+    with nothing on the document to say why. This answers it outright,
+    and lists the user fields SAP does have, so a near-miss in the name
+    is visible rather than guessed at.
+    """
+    frappe.only_for(("System Manager", "Administrator"))
+    settings = get_settings()
+    client = SAPClient(settings)
+    request_entity = "InventoryTransferRequests"
+    transfer_entity = _transfer_entity(client)
+
+    lines = [
+        _("Request (pushed from here): {0}").format(request_entity),
+        _("Transfer (pulled from SAP): {0}").format(transfer_entity or _("NOT FOUND on this install")),
+        "",
+    ]
+
+    for label, field, needs_both in (
+        (_("Integration Number"), (settings.get("integration_number_udf") or "").strip(), True),
+        (_("Van Flag"), (settings.get("van_request_udf") or "").strip(), False),
+    ):
+        if not field:
+            lines.append(_("{0}: not set in SAP Integration Settings — nothing is stamped or matched.").format(label))
+            continue
+
+        # Bypass the cache: this is run precisely after adding the field
+        # in SAP, and a ten-minute-old "missing" would be read as failure.
+        on_request = client.has_property(request_entity, field, use_cache=False)
+        on_transfer = bool(transfer_entity) and client.has_property(transfer_entity, field, use_cache=False)
+
+        lines.append("{0} ('{1}'):".format(label, field))
+        lines.append(_("  on {0}: {1}").format(request_entity, _("YES") if on_request else _("NO")))
+        lines.append(_("  on {0}: {1}").format(transfer_entity or "?", _("YES") if on_transfer else _("NO")))
+
+        if on_request and on_transfer:
+            lines.append(_("  -> Working. Requests carry it and the pull can match on it."))
+        elif on_request and needs_both:
+            lines.append(_("  -> Half done. SAP accepts it on the request, but it is not on the "
+                           "stock transfer, so the pull cannot match it back. Add the same user "
+                           "field to the stock transfer in SAP and set it to copy over."))
+        elif on_request:
+            lines.append(_("  -> Stamped on requests. Not on the transfer, so it cannot be pulled by."))
+        elif on_transfer:
+            lines.append(_("  -> On the transfer but not the request, so nothing ever writes a value into it."))
+        else:
+            lines.append(_("  -> Not in SAP under this name. Create it, or correct the name below."))
+        lines.append("")
+
+    for entity in [e for e in (request_entity, transfer_entity) if e]:
+        found = client.user_fields(entity)
+        lines.append(_("User fields seen on {0}: {1}").format(
+            entity, ", ".join(found) if found else _("none visible in a sample row")))
+    lines.append("")
+    lines.append(_("Note: SAP omits empty user fields from a sample row, so that last list "
+                   "under-reports. The YES/NO answers above are the reliable ones."))
+
+    summary = "\n".join(lines)
+    log_sap("Pull", "Success", transfer_entity or request_entity, message=summary[:9000])
     return summary
 
 

@@ -226,6 +226,50 @@ class SAPClient:
             return name
         return None
 
+    def has_property(self, entity, prop, use_cache=True):
+        """Whether ``entity`` really exposes ``prop`` — typically a U_ user
+        field.
+
+        Asks SAP to ``$select`` it: 200 means the property is there, 400
+        means it is not. That is decisive in a way reading a sample row is
+        not, because Service Layer omits null properties from its JSON —
+        a user field that exists but has never been filled is invisible in
+        a row, and we would wrongly conclude it is missing.
+
+        Both answers are cached for ten minutes, so a fifteen-second pull
+        does not re-ask a settled question, and a field added in SAP is
+        picked up without a restart.
+        """
+        if not entity or not prop:
+            return False
+        cache_key = f"sap_b1_prop:{entity}:{prop}"
+        if use_cache:
+            cached = frappe.cache().get_value(cache_key)
+            if cached is not None:
+                return cached == "1"
+        try:
+            self.get(entity, params={"$select": prop, "$top": 1})
+            answer = True
+        except Exception:
+            answer = False
+        frappe.cache().set_value(cache_key, "1" if answer else "0", expires_in_sec=600)
+        return answer
+
+    def user_fields(self, entity):
+        """The U_ user fields visible on a sample row of ``entity``.
+
+        A hint for diagnostics, not proof: null user fields are omitted
+        from the JSON, so this under-reports. Use has_property() to settle
+        whether a specific field exists.
+        """
+        try:
+            rows = self.get(entity, params={"$top": 1}).get("value") or []
+        except Exception:
+            return []
+        if not rows:
+            return []
+        return sorted(k for k in rows[0] if k.startswith("U_"))
+
     def find_entity(self, *keywords):
         """First EntitySet whose name contains every keyword (case
         insensitive), or None. Lets a tier bind to whatever this install

@@ -396,12 +396,28 @@ def push_material_request_doc(doc):
     # The correlation key. SAP copies this onto the Stock Transfer when the
     # request is converted, so the pull can find exactly the transfers that
     # originated here — which a flag living only on the request cannot do.
+    #
+    # Both user fields are checked against SAP before being sent. An
+    # unknown property makes Service Layer reject the whole document, so
+    # the alternative to checking is a van request that cannot be pushed
+    # at all; and a field silently absent from SAP is exactly the failure
+    # that leaves the number blank with nothing to show for it.
     reference_udf = (settings.get("integration_number_udf") or "").strip()
     if reference_udf:
-        payload[reference_udf] = doc.name
+        if SAPClient().has_property("InventoryTransferRequests", reference_udf):
+            payload[reference_udf] = doc.name
+        else:
+            log_sap("Push", "Warning", "InventoryTransferRequests",
+                    reference_doctype=doc.doctype, reference_name=doc.name, message=(
+                        f"Integration number field '{reference_udf}' does not exist on the SAP "
+                        "Inventory Transfer Request, so the request was sent without it and the "
+                        "pull cannot match it back. Create that user field in SAP (on BOTH the "
+                        "transfer request and the stock transfer, set to copy across), or correct "
+                        "the name in SAP Integration Settings. Use 'Check SAP User Fields' there "
+                        "to see the names SAP actually has."))
 
     udf = (settings.get("van_request_udf") or "").strip()
-    if udf:
+    if udf and SAPClient().has_property("InventoryTransferRequests", udf):
         payload[udf] = (settings.get("van_request_udf_value") or "Yes").strip()
 
     return _push(doc, "InventoryTransferRequests", payload, _("Stock Transfer Request"))

@@ -55,6 +55,7 @@
 		// SAP sync
 		"Pending":   "yellow",
 		"Success":   "green",
+		"Warning":   "orange",
 		"Failed":    "red",
 		"Synced":    "green",
 	};

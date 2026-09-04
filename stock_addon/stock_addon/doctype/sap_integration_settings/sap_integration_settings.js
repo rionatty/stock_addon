@@ -23,8 +23,31 @@ frappe.ui.form.on("SAP Integration Settings", {
 			});
 		};
 
+		// Long report — show it as preformatted text rather than a wrapped
+		// paragraph, so the aligned YES/NO answers stay readable.
+		const report = (method, label) => {
+			if (frm.is_dirty() || frm.is_new()) {
+				frappe.msgprint(__("Save the settings first — these actions use the saved values."));
+				return;
+			}
+			frappe.call({
+				method: `stock_addon.stock_addon.doctype.sap_integration_settings.sap_integration_settings.${method}`,
+				freeze: true,
+				freeze_message: __(label + "..."),
+				callback(r) {
+					frappe.msgprint({
+						title: __(label),
+						message: `<pre style="white-space:pre-wrap">${frappe.utils.escape_html(r.message || "")}</pre>`,
+						indicator: "blue",
+						wide: true,
+					});
+				},
+			});
+		};
+
 		frm.add_custom_button(__("Test Connection"), () => call("test_connection", "Testing SAP connection"));
 		frm.add_custom_button(__("Discover SAP Entities"), () => call("discover_entities_now", "Reading SAP $metadata"));
+		frm.add_custom_button(__("Check SAP User Fields"), () => report("check_integration_fields_now", "Checking SAP user fields"));
 
 		if (frm.doc.enabled) {
 			frm.add_custom_button(__("Sync Items"), () => call("sync_items_now", "Syncing items from SAP"), __("Masters"));
