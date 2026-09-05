@@ -8,9 +8,15 @@ these as a single draft — one request carrying the whole document — and
 never comes back to submit it, so without this they queue up in the desk
 waiting for someone to submit them by hand.
 
-Driven by Stock Addon Settings -> Auto Submit, off by default and set per
-doctype. Submitting is not reversible: a submitted document can only be
-cancelled and amended, never edited.
+Driven by SAP Integration Settings -> Auto Submit, off by default and set
+per doctype. Submitting is not reversible: a submitted document can only
+be cancelled and amended, never edited.
+
+It sits on that screen because submitting is what sends these documents
+to SAP, so it belongs next to "Send Sales Orders" where anyone
+configuring the flow will look for it. It is NOT gated on the SAP master
+switch, though: turning a draft into a submitted document is worth doing
+whether or not SAP is connected.
 
 Two things make this less simple than it looks.
 
@@ -126,17 +132,20 @@ def _wanted(doc):
     if _has_active_workflow(doc.doctype):
         # A workflow owns the docstatus. Submitting behind its back is
         # either refused outright or leaves the workflow state describing
-        # a document it no longer matches. Stock Addon Settings warns
-        # about this on save, so the silence here is not the first anyone
-        # hears of it.
+        # a document it no longer matches. The settings screen warns about
+        # this on save, so the silence here is not the first anyone hears
+        # of it.
         return False
 
     return True
 
 
 def _settings():
+    """Read the settings document directly, not through
+    integration_enabled() — auto-submit must keep working when the SAP
+    master switch is off."""
     try:
-        return frappe.get_cached_doc("Stock Addon Settings")
+        return frappe.get_cached_doc("SAP Integration Settings")
     except Exception:
         return None
 

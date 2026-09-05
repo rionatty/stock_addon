@@ -35,6 +35,12 @@
   "push_expense_journals",
   "prices_include_tax",
   "sap_cash_account",
+  "section_auto_submit",
+  "auto_submit_sales_orders",
+  "auto_submit_material_requests",
+  "column_break_auto_submit",
+  "auto_submit_immediately",
+  "auto_submit_van_returns",
   "section_pull",
   "pull_van_transfers",
   "integration_number_udf",
@@ -237,6 +243,48 @@
    "fieldname": "sap_cash_account",
    "fieldtype": "Data",
    "label": "SAP Cash G/L Account Code (Fallback)"
+  },
+  {
+   "description": "The Sales Pro app creates these as drafts and never comes back to submit them. Turn a document on here and it is submitted the moment it is created — which is also what sends it to SAP. A submitted document can no longer be edited, only cancelled and amended, so leave a document off if anyone corrects it before submitting. These two work whether or not the SAP integration above is switched on.",
+   "fieldname": "section_auto_submit",
+   "fieldtype": "Section Break",
+   "label": "Auto Submit (Documents Created as Drafts)"
+  },
+  {
+   "default": "Off",
+   "description": "Off: orders arrive as drafts and someone submits them. From the App Only: orders from Sales Pro are submitted on arrival, while orders typed in the desk stay drafts. App and Desk: everything is submitted on creation. Submitting is what triggers 'Send Sales Orders' above.",
+   "fieldname": "auto_submit_sales_orders",
+   "fieldtype": "Select",
+   "label": "Auto-Submit Sales Orders",
+   "options": "Off\nFrom the App Only\nApp and Desk"
+  },
+  {
+   "default": "Off",
+   "description": "Same, for van stock requests. Submitting one sends it to SAP as an Inventory Transfer Request straight away, so a request whose warehouse is missing or unmapped will submit and then fail its push. Van returns are left alone unless the box opposite is ticked.",
+   "fieldname": "auto_submit_material_requests",
+   "fieldtype": "Select",
+   "label": "Auto-Submit Material Requests",
+   "options": "Off\nFrom the App Only\nApp and Desk"
+  },
+  {
+   "fieldname": "column_break_auto_submit",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:['From the App Only', 'App and Desk'].includes(doc.auto_submit_sales_orders) || ['From the App Only', 'App and Desk'].includes(doc.auto_submit_material_requests)",
+   "description": "Leave OFF. The document is then submitted a moment later, in the background, so the salesman's phone is not left waiting on the SAP call that submitting triggers (SAP is given 25 seconds to answer). Tick it only if the desk must show the document as submitted the instant it is saved — that adds SAP's response time to every save.",
+   "fieldname": "auto_submit_immediately",
+   "fieldtype": "Check",
+   "label": "Submit In the Same Request"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:['From the App Only', 'App and Desk'].includes(doc.auto_submit_material_requests)",
+   "description": "Van returns are left as drafts because the app creates them that way on purpose, and the permanent-return flow expects a manager to approve them first. Tick this only if returns should be submitted on arrival too.",
+   "fieldname": "auto_submit_van_returns",
+   "fieldtype": "Check",
+   "label": "Also Auto-Submit Van Returns"
   },
   {
    "fieldname": "section_pull",

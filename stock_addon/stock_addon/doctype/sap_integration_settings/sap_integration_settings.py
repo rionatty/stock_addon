@@ -13,6 +13,13 @@ from frappe import _
 from frappe.model.document import Document
 
 
+# Auto-submit toggles and the doctype each one governs.
+AUTO_SUBMIT_FIELDS = (
+    ("Sales Order", "auto_submit_sales_orders"),
+    ("Material Request", "auto_submit_material_requests"),
+)
+
+
 class SAPIntegrationSettings(Document):
     def validate(self):
         if self.enabled and not (self.service_layer_url and self.company_db and self.username):
@@ -20,6 +27,25 @@ class SAPIntegrationSettings(Document):
         if self.enabled and not self.go_live_date:
             from frappe.utils import nowdate
             self.go_live_date = nowdate()
+        self._warn_about_workflows()
+
+    def _warn_about_workflows(self):
+        """A Workflow owns its document's submission.
+
+        Auto-submit stands down when one is active, rather than fighting
+        it. Say so while the setting is being changed — otherwise the
+        toggle reads as switched on and nothing ever happens.
+        """
+        for doctype, fieldname in AUTO_SUBMIT_FIELDS:
+            if (self.get(fieldname) or "Off") == "Off":
+                continue
+            if not frappe.db.exists("Workflow", {"document_type": doctype, "is_active": 1}):
+                continue
+            frappe.msgprint(
+                _("{0} has an active Workflow, which decides for itself when a document is submitted. Auto-submit will stand down for it.").format(_(doctype)),
+                indicator="orange",
+                title=_("Auto-Submit Will Not Apply"),
+            )
 
 
 def _require_manager():
