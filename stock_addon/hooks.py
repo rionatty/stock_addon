@@ -372,20 +372,21 @@ doc_events = {
 # "Enable SAP Integration" master switch + their own feature toggles).
 scheduler_events = {
     "cron": {
-        # every minute: mirror SAP van-warehouse transfers into ERPNext.
-        # A run that finds nothing is one cheap filtered GET, and the
-        # single-flight lock stops runs overlapping, so this is the
-        # tightest loop the scheduler allows.
+        # Every minute, ONE job for everything that has to be near-live:
+        # van transfers, invoices and payments. A single job means a
+        # single worker and a single lock — two jobs each polling inside
+        # their own minute would compete for both. Each stream keeps its
+        # own interval, and asking SAP "anything new?" costs one row, so
+        # an idle minute is a few tiny reads.
         "* * * * *": [
-            "stock_addon.stock_addon.sap_integration.stock_pull.scheduled_pull",
+            "stock_addon.stock_addon.sap_integration.realtime_sync.tick",
         ],
-        # hourly: re-sync items + customers (only if auto-sync is on)
+        # Hourly: master data. Items, customers and pricing change rarely
+        # and a full sweep is expensive — putting them on the live loop
+        # would be the overload the loop is designed to avoid.
         "0 * * * *": [
             "stock_addon.stock_addon.sap_integration.masters.scheduled_masters_sync",
             "stock_addon.stock_addon.sap_integration.pricing.scheduled_pricing_sync",
-            # invoices and payments raised in SAP, brought back so ERPNext
-            # shows what each customer owes
-            "stock_addon.stock_addon.sap_integration.document_pull.scheduled_document_pull",
         ],
     },
 }

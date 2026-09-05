@@ -136,61 +136,67 @@ def pull_sap_invoices():
         return _pull_invoices()
 
 
+def _handle_invoice(row, settings):
+    """Import one SAP invoice.
+
+    Returns (outcome, reason) where outcome is "created", "skipped" —
+    nothing here will ever import it — or "failed", meaning it could
+    still succeed once somebody fixes the cause.
+    """
+    docentry = cint(row.get("DocEntry"))
+
+    if _too_old(row, _since(settings)):
+        return "skipped", _("older than the Pull Documents From date")
+    if row.get("Cancelled") == "tYES":
+        return "skipped", _("cancelled in SAP")
+    if frappe.db.exists("Sales Invoice", {"custom_sap_docentry": str(docentry)}):
+        return "skipped", _("already pulled")
+    # NumAtCard carries the ERPNext name on anything pushed from here
+    origin = (row.get("NumAtCard") or "").strip()
+    if origin and frappe.db.exists("Sales Invoice", origin):
+        return "skipped", _("originated in ERPNext")
+
+    customer = _customer_for(row.get("CardCode"))
+    if not customer:
+        return "failed", _("no ERPNext customer for CardCode {0}").format(row.get("CardCode"))
+
+    try:
+        name = _make_sales_invoice(row, customer, cint(settings.get("pull_invoice_updates_stock")))
+    except Exception as e:
+        log_sap("Pull", "Failed", "Invoices", message=(
+            f"SAP invoice DocEntry {docentry} (DocNum {row.get('DocNum')}) "
+            f"could not be created: {str(e)[:500]}"))
+        return "failed", _("failed — see the log")
+
+    _check_total(name, row)
+    return "created", None
+
+
 def _pull_invoices():
     settings = get_settings()
     client = SAPClient(settings)
-    since = _since(settings)
-    moves_stock = cint(settings.get("pull_invoice_updates_stock"))
-
-    created = skipped = 0
-    reasons = {}
-
-    def skip(reason):
-        nonlocal skipped
-        skipped += 1
-        reasons[reason] = reasons.get(reason, 0) + 1
-
     rows = _recent(client, "Invoices", _scan_limit(settings))
-    for row in rows:
-        docentry = cint(row.get("DocEntry"))
-        if _too_old(row, since):
-            skip(_("older than the Pull Documents From date"))
-            continue
-        if row.get("Cancelled") == "tYES":
-            skip(_("cancelled in SAP"))
-            continue
-        if frappe.db.exists("Sales Invoice", {"custom_sap_docentry": str(docentry)}):
-            skip(_("already pulled"))
-            continue
-        # NumAtCard carries the ERPNext name on anything pushed from here
-        origin = (row.get("NumAtCard") or "").strip()
-        if origin and frappe.db.exists("Sales Invoice", origin):
-            skip(_("originated in ERPNext"))
-            continue
-
-        customer = _customer_for(row.get("CardCode"))
-        if not customer:
-            skip(_("no ERPNext customer for CardCode {0}").format(row.get("CardCode")))
-            continue
-
-        try:
-            name = _make_sales_invoice(row, customer, moves_stock)
-        except Exception as e:
-            log_sap("Pull", "Failed", "Invoices", message=(
-                f"SAP invoice DocEntry {docentry} (DocNum {row.get('DocNum')}) "
-                f"could not be created: {str(e)[:500]}"))
-            skip(_("failed — see the log"))
-            continue
-
-        created += 1
-        _check_total(name, row)
-
-    detail = ", ".join(f"{count} {reason}" for reason, count in sorted(reasons.items()))
-    message = _("SAP invoices: {0} created, {1} skipped ({2}) out of {3} examined").format(
-        created, skipped, detail or _("none"), len(rows))
+    message = _summarise("Invoices", rows, settings, _handle_invoice)
     log_sap("Pull", "Success", "Invoices", message=message)
     frappe.db.commit()
     return message
+
+
+def _summarise(entity, rows, settings, handler):
+    """Run the handler over a scanned page and describe what happened."""
+    created = skipped = 0
+    reasons = {}
+    for row in rows:
+        outcome, reason = handler(row, settings)
+        if outcome == "created":
+            created += 1
+            continue
+        skipped += 1
+        if reason:
+            reasons[reason] = reasons.get(reason, 0) + 1
+    detail = ", ".join(f"{count} {reason}" for reason, count in sorted(reasons.items()))
+    return _("SAP {0}: {1} created, {2} skipped ({3}) out of {4} examined").format(
+        entity, created, skipped, detail or _("none"), len(rows))
 
 
 def _make_sales_invoice(row, customer, moves_stock):
@@ -283,53 +289,39 @@ def pull_sap_payments():
         return _pull_payments()
 
 
+def _handle_payment(row, settings):
+    """Import one SAP incoming payment. Same contract as _handle_invoice."""
+    docentry = cint(row.get("DocEntry"))
+
+    if _too_old(row, _since(settings)):
+        return "skipped", _("older than the Pull Documents From date")
+    if row.get("Cancelled") == "tYES":
+        return "skipped", _("cancelled in SAP")
+    if (row.get("DocType") or "rCustomer") != "rCustomer":
+        return "skipped", _("not a customer payment")
+    if frappe.db.exists("Payment Entry", {"custom_sap_docentry": str(docentry)}):
+        return "skipped", _("already pulled")
+
+    customer = _customer_for(row.get("CardCode"))
+    if not customer:
+        return "failed", _("no ERPNext customer for CardCode {0}").format(row.get("CardCode"))
+
+    try:
+        _make_payment_entry(row, customer)
+    except Exception as e:
+        log_sap("Pull", "Failed", "IncomingPayments", message=(
+            f"SAP payment DocEntry {docentry} (DocNum {row.get('DocNum')}) "
+            f"could not be created: {str(e)[:500]}"))
+        return "failed", _("failed — see the log")
+
+    return "created", None
+
+
 def _pull_payments():
     settings = get_settings()
     client = SAPClient(settings)
-    since = _since(settings)
-
-    created = skipped = 0
-    reasons = {}
-
-    def skip(reason):
-        nonlocal skipped
-        skipped += 1
-        reasons[reason] = reasons.get(reason, 0) + 1
-
     rows = _recent(client, "IncomingPayments", _scan_limit(settings))
-    for row in rows:
-        docentry = cint(row.get("DocEntry"))
-        if _too_old(row, since):
-            skip(_("older than the Pull Documents From date"))
-            continue
-        if row.get("Cancelled") == "tYES":
-            skip(_("cancelled in SAP"))
-            continue
-        if (row.get("DocType") or "rCustomer") != "rCustomer":
-            skip(_("not a customer payment"))
-            continue
-        if frappe.db.exists("Payment Entry", {"custom_sap_docentry": str(docentry)}):
-            skip(_("already pulled"))
-            continue
-
-        customer = _customer_for(row.get("CardCode"))
-        if not customer:
-            skip(_("no ERPNext customer for CardCode {0}").format(row.get("CardCode")))
-            continue
-
-        try:
-            _make_payment_entry(row, customer)
-        except Exception as e:
-            log_sap("Pull", "Failed", "IncomingPayments", message=(
-                f"SAP payment DocEntry {docentry} (DocNum {row.get('DocNum')}) "
-                f"could not be created: {str(e)[:500]}"))
-            skip(_("failed — see the log"))
-            continue
-        created += 1
-
-    detail = ", ".join(f"{count} {reason}" for reason, count in sorted(reasons.items()))
-    message = _("SAP payments: {0} created, {1} skipped ({2}) out of {3} examined").format(
-        created, skipped, detail or _("none"), len(rows))
+    message = _summarise("IncomingPayments", rows, settings, _handle_payment)
     log_sap("Pull", "Success", "IncomingPayments", message=message)
     frappe.db.commit()
     return message
@@ -412,6 +404,114 @@ def _make_payment_entry(row, customer):
     return doc.name
 
 
+# ----------------------------------------------------- incremental poll
+#
+# The manual pull above scans SAP's recent documents, which is the right
+# shape for a catch-up you asked for. It is the wrong shape to run every
+# minute. These do the same work incrementally: ask what the newest
+# DocEntry is (one row), and fetch only what is above the last one
+# handled.
+#
+# The high-water mark advances only across documents that were imported
+# or permanently skipped. One that failed for a fixable reason — a
+# customer not synced yet, an item missing — holds the mark where it is
+# and is retried on the next tick, while documents after it are still
+# imported from the same fetch. A document that keeps failing would
+# otherwise anchor the window for good, so after MAX_ATTEMPTS it is
+# logged by name and stepped over.
+
+MAX_ATTEMPTS = 5
+
+
+def _watermark(field):
+    return cint(get_settings().get(field))
+
+
+def _set_watermark(field, value):
+    if cint(value) == _watermark(field):
+        return
+    frappe.db.set_single_value("SAP Integration Settings", field, cint(value))
+    frappe.clear_cache(doctype="SAP Integration Settings")
+
+
+def _newest_docentry(client, entity):
+    """The highest DocEntry SAP holds — one row, the cheapest question
+    that can be asked of a document table."""
+    rows = client.get_all(entity, params={
+        "$select": "DocEntry", "$orderby": "DocEntry desc", "$top": 1,
+    })
+    return cint(rows[0].get("DocEntry")) if rows else 0
+
+
+def _attempts(entity, docentry):
+    key = f"sap_pull_attempts:{entity}:{docentry}"
+    count = cint(frappe.cache().get_value(key)) + 1
+    frappe.cache().set_value(key, count, expires_in_sec=86400)
+    return count
+
+
+def _poll(entity, field, handler):
+    """Shared incremental poll. Returns the number of documents created."""
+    settings = get_settings()
+    client = SAPClient(settings)
+    mark = _watermark(field)
+
+    newest = _newest_docentry(client, entity)
+    if not newest:
+        return 0
+
+    if not mark:
+        # First run: baseline to what SAP already has rather than
+        # importing its whole history. Use the manual pull for anything
+        # older that is genuinely wanted.
+        _set_watermark(field, newest)
+        log_sap("Pull", "Success", entity, message=(
+            f"Live sync started at DocEntry {newest}. Documents raised in SAP from now on "
+            "arrive automatically; use 'Pull SAP Documents' for anything before this."))
+        return 0
+
+    if newest <= mark:
+        return 0                      # nothing new — the common case
+
+    rows = client.get_all(entity, params={
+        "$filter": f"DocEntry gt {mark}",       # numeric: same syntax on v1 and v2
+        "$orderby": "DocEntry asc",
+        "$top": _scan_limit(settings),
+    })
+
+    created = 0
+    advance_to = mark
+    contiguous = True
+    for row in rows:
+        entry = cint(row.get("DocEntry"))
+        outcome = handler(row, settings)
+        if outcome == "created":
+            created += 1
+        if outcome == "failed" and _attempts(entity, entry) < MAX_ATTEMPTS:
+            contiguous = False        # hold the mark; retry next tick
+        elif contiguous:
+            advance_to = entry
+
+    _set_watermark(field, advance_to)
+    if created:
+        frappe.db.commit()
+    return created
+
+
+def poll_invoices():
+    with single_flight("sap_invoice_pull") as lock:
+        if not lock.acquired:
+            return 0
+        return _poll("Invoices", "last_invoice_docentry", _handle_invoice)
+
+
+def poll_payments():
+    with single_flight("sap_payment_pull") as lock:
+        if not lock.acquired:
+            return 0
+        return _poll("IncomingPayments", "last_payment_docentry", _handle_payment)
+
+
 # --------------------------------------------------------------- entry
 @frappe.whitelist()
 def pull_documents():
@@ -429,14 +529,9 @@ def pull_documents():
 
 
 def scheduled_document_pull():
-    """Hourly job. Each half checks its own switch, so one can run
-    without the other."""
-    if not integration_enabled():
-        return
-    try:
-        if integration_enabled("pull_sap_invoices"):
-            pull_sap_invoices()
-        if integration_enabled("pull_sap_payments"):
-            pull_sap_payments()
-    except Exception:
-        log_sap("Pull", "Failed", "Documents", message=frappe.get_traceback()[:5000])
+    """Kept as an entry point. Invoices and payments are now polled by
+    realtime_sync.tick along with transfers, so a stale scheduler entry
+    pointing here lands in the same place rather than running a second,
+    heavier scan beside it."""
+    from stock_addon.stock_addon.sap_integration.realtime_sync import tick
+    tick()

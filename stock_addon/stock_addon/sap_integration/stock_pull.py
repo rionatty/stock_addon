@@ -507,36 +507,13 @@ def pull_from_docentry(docentry):
 
 
 def scheduled_pull():
-    """Scheduler job, once a minute.
+    """Kept as an entry point; the sub-minute loop now lives in
+    realtime_sync.tick, which drives transfers, invoices and payments
+    from one job so they share a worker instead of competing for one.
 
-    A minute is the finest interval Frappe's cron allows, so for anything
-    closer to live this job polls SEVERAL times within its own minute,
-    spaced by Pull Interval (Seconds). At 15s a transfer posted in SAP
-    shows up in ERPNext within about fifteen seconds instead of up to a
-    minute.
-
-    The cost is real and worth stating: the job holds its worker for the
-    span it is polling. It stops short of the next minute so runs never
-    overlap, and the single-flight lock makes an overlap harmless anyway.
-    Set the interval to 60 for one pass a minute (the old behaviour).
+    Migrate clears the old scheduler entry, but a stale one — or a hand
+    call — must not start a second polling loop beside the real tick.
+    Delegating means either route ends up in the same lock.
     """
-    if not integration_enabled("pull_van_transfers"):
-        return
-
-    interval = cint(get_settings().get("pull_interval_seconds")) or 60
-    interval = max(5, min(60, interval))
-    # leave headroom so this job finishes before the next minute fires
-    budget = 55
-    # passes at t=0, interval, 2*interval ... while still inside the budget
-    passes = max(1, (budget // interval) + 1) if interval < 60 else 1
-
-    for n in range(passes):
-        if n:
-            time.sleep(interval)
-        try:
-            pull_van_transfers(triggered_by="scheduler")
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), "SAP van transfer pull failed")
-            log_sap("Pull", "Failed", "InventoryTransfers",
-                    message=frappe.get_traceback()[-2000:])
-            return   # a failing SAP will fail every pass — stop hammering it
+    from stock_addon.stock_addon.sap_integration.realtime_sync import tick
+    tick()

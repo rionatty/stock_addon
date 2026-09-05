@@ -55,9 +55,12 @@
   "section_document_pull",
   "pull_sap_invoices",
   "pull_sap_payments",
+  "document_pull_interval_seconds",
   "column_break_document_pull",
   "document_pull_from_date",
   "pull_invoice_updates_stock",
+  "last_invoice_docentry",
+  "last_payment_docentry",
   "section_mapping",
   "warehouse_mappings",
   "section_tax_mapping",
@@ -385,6 +388,14 @@
    "label": "Pull Payments Taken in SAP"
   },
   {
+   "default": "60",
+   "depends_on": "eval:doc.pull_sap_invoices || doc.pull_sap_payments",
+   "description": "How often to ask SAP whether a new invoice or payment exists, in seconds. Asking is cheap — one row, not a page of documents — so only a genuinely new document turns into a fetch. 60 checks once a minute; lower it for closer to live.",
+   "fieldname": "document_pull_interval_seconds",
+   "fieldtype": "Int",
+   "label": "Document Check Interval (Seconds)"
+  },
+  {
    "fieldname": "column_break_document_pull",
    "fieldtype": "Column Break"
   },
@@ -402,6 +413,20 @@
    "fieldname": "pull_invoice_updates_stock",
    "fieldtype": "Check",
    "label": "Pulled Invoices Move Stock"
+  },
+  {
+   "depends_on": "pull_sap_invoices",
+   "description": "Highest SAP invoice DocEntry handled by the live sync. Set automatically on the first run to whatever SAP already had, so switching on does not import years of history. Lower it to reach further back.",
+   "fieldname": "last_invoice_docentry",
+   "fieldtype": "Int",
+   "label": "Live Sync From Invoice DocEntry"
+  },
+  {
+   "depends_on": "pull_sap_payments",
+   "description": "The same mark for payments. It advances only past documents that were imported or permanently skipped — one that failed for a fixable reason holds it, and is retried, so nothing is stranded behind it.",
+   "fieldname": "last_payment_docentry",
+   "fieldtype": "Int",
+   "label": "Live Sync From Payment DocEntry"
   },
   {
    "fieldname": "section_mapping",
