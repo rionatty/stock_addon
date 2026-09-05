@@ -96,7 +96,7 @@
   "read_only": 1,
   "in_list_view": 0,
   "in_standard_filter": 1,
-  "description": "Weekday (Monday\u2013Sunday) denormalized from the active Journey Plan on submit. Used by the mobile app to resolve today's route.",
+  "description": "Weekday (Monday–Sunday) denormalized from the active Journey Plan on submit. Used by the mobile app to resolve today's route.",
   "module": "Stock Addon"
  },
  {
@@ -634,7 +634,7 @@
   "no_copy": 1,
   "in_standard_filter": 1,
   "unique": 1,
-  "description": "SAP Business Partner code \u2014 set by the customer sync; required to push transactions for this customer.",
+  "description": "SAP Business Partner code — set by the customer sync; required to push transactions for this customer.",
   "module": "Stock Addon"
  },
  {
@@ -674,7 +674,7 @@
   "insert_after": "account_number",
   "in_standard_filter": 1,
   "translatable": 0,
-  "description": "The matching G/L account code in SAP B1. Used whenever this account is posted to SAP \u2014 incoming payments, banking and expense journals. Leave empty to fall back to the ERPNext Account Number.",
+  "description": "The matching G/L account code in SAP B1. Used whenever this account is posted to SAP — incoming payments, banking and expense journals. Leave empty to fall back to the ERPNext Account Number.",
   "module": "Stock Addon"
  },
  {
@@ -716,6 +716,27 @@
   "read_only": 1,
   "no_copy": 1,
   "allow_on_submit": 1,
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_customers_tab",
+  "dt": "Sales Person",
+  "fieldname": "custom_customers_tab",
+  "label": "Customers",
+  "fieldtype": "Tab Break",
+  "insert_after": "targets",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_customer_list",
+  "dt": "Sales Person",
+  "fieldname": "custom_customer_list",
+  "label": "Customers",
+  "fieldtype": "HTML",
+  "insert_after": "custom_customers_tab",
+  "description": "Customers assigned to this sales person, i.e. carrying them in the customer's Sales Team. This is the same assignment the Sales Pro app filters on, so a customer added here appears on the rep's phone.",
   "module": "Stock Addon"
  }
 ]

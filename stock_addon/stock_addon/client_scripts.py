@@ -66,6 +66,16 @@ def remove_customer_list_script():
         frappe.db.commit()
 
 
+def install_sales_person_form_script():
+    """Push public/js/sales_person.js into the database as a Form Client Script."""
+    _upsert(
+        name     = "sales-person-form-stock-addon",
+        dt       = "Sales Person",
+        view     = "Form",
+        filename = "sales_person.js",
+    )
+
+
 def install_work_order_form_script():
     """Push public/js/work_order.js into the database as a Form Client Script."""
     _upsert(
