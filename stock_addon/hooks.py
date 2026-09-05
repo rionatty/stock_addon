@@ -304,12 +304,20 @@ doc_events = {
     },
     "Material Request": {
         "validate": "stock_addon.stock_addon.doctype.material_request.material_request.calculate_total_qty",
+        # The app posts van requests as drafts — submit them on arrival if
+        # Stock Addon Settings asks for it.
+        "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
     },
     "Landed Cost Voucher": {
         "on_submit": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
     },
     "Sales Invoice": {
         "validate": "stock_addon.stock_addon.doc_events.sales_invoice.validate",
+    },
+    "Sales Order": {
+        # The app posts orders as drafts — submit them on arrival if
+        # Stock Addon Settings asks for it.
+        "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
     },
     "Sales Person": {
         # On creation, auto-provision a Cost Center + Warehouse named after
