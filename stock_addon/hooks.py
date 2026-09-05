@@ -328,6 +328,9 @@ doc_events = {
     },
     "Material Request": {
         "validate": "stock_addon.stock_addon.doctype.material_request.material_request.calculate_total_qty",
+        # The app posts van requests as drafts — submit them on arrival if
+        # Stock Addon Settings asks for it.
+        "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
         # SAP: van stock requests go to SAP as Inventory Transfer Requests
         "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_material_request_submit",
     },
@@ -344,6 +347,9 @@ doc_events = {
         "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_payment_entry_submit",
     },
     "Sales Order": {
+        # The app posts orders as drafts — submit them on arrival if
+        # Stock Addon Settings asks for it.
+        "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
         # SAP: only when "Send Sales Orders" is On Submit — the handler checks
         "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_sales_order_submit",
     },
