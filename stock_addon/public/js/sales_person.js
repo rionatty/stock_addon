@@ -85,9 +85,10 @@
 				.map((row) => {
 					const url = `/app/customer/${encodeURIComponent(row.name)}`;
 					return `<tr>
+						<td class="text-muted">${esc(row.code || "")}</td>
 						<td><a href="${url}">${esc(row.customer_name || row.name)}</a>${
 						row.disabled ? ` <span class="text-muted">(${__("disabled")})</span>` : ""
-					}<div class="text-muted small">${esc(row.name)}</div></td>
+					}</td>
 						<td>${esc(row.customer_group || "")}</td>
 						<td>${esc(row.payment_terms || "")}</td>
 						<td class="text-right"><a href="${url}#sales_team_tab" title="${__(
@@ -103,6 +104,7 @@
 
 			body = `<div style="overflow-x:auto"><table class="table table-bordered" style="margin:0">
 					<thead><tr>
+						<th>${__("Code")}</th>
 						<th>${__("Customer")}</th>
 						<th>${__("Customer Group")}</th>
 						<th>${__("Payment Terms")}</th>
