@@ -51,11 +51,18 @@ def get_customers(sales_person):
 
     share = {row["parent"]: row for row in team}
 
+    fields = ["name", "customer_name", "customer_group", "territory",
+              "payment_terms", "disabled"]
+    # The SAP CardCode is the code people actually use, but it only exists
+    # where the SAP integration is installed — this same module ships on
+    # the branch without it.
+    if frappe.get_meta("Customer").get_field("custom_sap_cardcode"):
+        fields.append("custom_sap_cardcode")
+
     rows = frappe.get_all(
         "Customer",
         filters={"name": ("in", list(share))},
-        fields=["name", "customer_name", "customer_group", "territory",
-                "payment_terms", "disabled"],
+        fields=fields,
         order_by="customer_name asc",
     )
 
@@ -64,6 +71,9 @@ def get_customers(sales_person):
         row["balance"] = flt(balances.get(row["name"]))
         row["contribution"] = flt(share[row["name"]].get("allocated_percentage"))
         row["commission_rate"] = share[row["name"]].get("commission_rate")
+        # Where a site names customers after themselves, the document id
+        # repeats the name and says nothing — the CardCode is the code.
+        row["code"] = (row.get("custom_sap_cardcode") or "").strip() or row["name"]
     return rows
 
 
