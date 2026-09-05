@@ -62,6 +62,35 @@ def _scan_limit(settings):
     return cint(settings.get("pull_scan_limit")) or DEFAULT_SCAN
 
 
+def _item_for(sap_code):
+    """The ERPNext item for a SAP ItemCode, or None.
+
+    Items synced from SAP are named after their SAP code, so the docname
+    usually IS the code — but an item created here first, or on a site
+    that names items by series, carries the code in item_code with a
+    different docname. Checking only the docname reports a perfectly
+    present item as missing.
+    """
+    code = (sap_code or "").strip()
+    if not code:
+        return None
+    if frappe.db.exists("Item", code):
+        return code
+    return frappe.db.get_value("Item", {"item_code": code}, "name")
+
+
+def _item_group_filter_note():
+    """Why an item might never have arrived, in the words of the setting
+    that decided it."""
+    groups = (get_settings().get("sap_item_group_codes") or "").strip()
+    if groups:
+        return (f"'Sync Items' only brings SAP items that are sales items AND in item "
+                f"group(s) {groups} — an item outside that filter never arrives. Widen "
+                "'SAP Item Group Codes' in SAP Integration Settings, or create the item here")
+    return ("'Sync Items' only brings SAP items flagged as sales items — one that is not "
+            "will never arrive. Flag it in SAP, or create the item here")
+
+
 def _customer_for(card_code):
     code = (card_code or "").strip()
     if not code:
@@ -220,12 +249,13 @@ def _make_sales_invoice(row, customer, moves_stock):
     vat_group = None
     for line in row.get("DocumentLines") or []:
         code = (line.get("ItemCode") or "").strip()
-        if not code or not frappe.db.exists("Item", code):
+        item = _item_for(code)
+        if not item:
             raise ValueError(
-                f"item '{code}' does not exist in ERPNext — run Sync Items first")
+                f"item '{code}' is not in ERPNext. {_item_group_filter_note()}")
         vat_group = vat_group or (line.get("VatGroup") or "").strip()
         doc.append("items", {
-            "item_code": code,
+            "item_code": item,
             "qty": flt(line.get("Quantity")),
             # net price: VAT is added by the mapped tax template, exactly
             # as it is for an invoice typed here
