@@ -38,17 +38,22 @@ def get_customers(sales_person):
     """Customers on this rep's round, with balance, group and payment terms."""
     frappe.has_permission("Customer", throw=True)
 
-    names = frappe.get_all(
+    # Read the Sales Team rows themselves, not just the customer names —
+    # the contribution shown in the tab is the one already sitting on the
+    # customer, so the two screens can never disagree.
+    team = frappe.get_all(
         "Sales Team",
         filters={"sales_person": sales_person, "parenttype": "Customer"},
-        pluck="parent",
+        fields=["parent", "allocated_percentage", "commission_rate"],
     )
-    if not names:
+    if not team:
         return []
+
+    share = {row["parent"]: row for row in team}
 
     rows = frappe.get_all(
         "Customer",
-        filters={"name": ("in", names)},
+        filters={"name": ("in", list(share))},
         fields=["name", "customer_name", "customer_group", "territory",
                 "payment_terms", "disabled"],
         order_by="customer_name asc",
@@ -57,6 +62,8 @@ def get_customers(sales_person):
     balances = get_customer_balances([r["name"] for r in rows])
     for row in rows:
         row["balance"] = flt(balances.get(row["name"]))
+        row["contribution"] = flt(share[row["name"]].get("allocated_percentage"))
+        row["commission_rate"] = share[row["name"]].get("commission_rate")
     return rows
 
 
