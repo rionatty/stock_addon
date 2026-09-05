@@ -108,6 +108,7 @@ frappe.ui.form.on("SAP Integration Settings", {
 					__("Pull")
 				);
 			}, __("Transactions"));
+			frm.add_custom_button(__("Pull SAP Documents"), () => report("pull_documents_now", "Pulling invoices and payments from SAP"), __("Transactions"));
 			frm.add_custom_button(__("Send Pending to SAP"), () => call("push_pending_now", "Sending pending documents to SAP"), __("Transactions"));
 			frm.add_custom_button(__("Retry Failed Pushes"), () => call("retry_failed_now", "Retrying failed pushes"), __("Transactions"));
 			frm.add_custom_button(__("Sync Monitor"), () => frappe.set_route("query-report", "SAP Sync Monitor"));

@@ -383,6 +383,9 @@ scheduler_events = {
         "0 * * * *": [
             "stock_addon.stock_addon.sap_integration.masters.scheduled_masters_sync",
             "stock_addon.stock_addon.sap_integration.pricing.scheduled_pricing_sync",
+            # invoices and payments raised in SAP, brought back so ERPNext
+            # shows what each customer owes
+            "stock_addon.stock_addon.sap_integration.document_pull.scheduled_document_pull",
         ],
     },
 }

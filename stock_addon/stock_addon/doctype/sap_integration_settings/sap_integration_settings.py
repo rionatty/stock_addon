@@ -130,6 +130,13 @@ def check_integration_fields_now():
 
 
 @frappe.whitelist()
+def pull_documents_now():
+    _require_manager()
+    from stock_addon.stock_addon.sap_integration.document_pull import pull_documents
+    return pull_documents()
+
+
+@frappe.whitelist()
 def pull_from_docentry_now(docentry):
     _require_manager()
     from stock_addon.stock_addon.sap_integration.stock_pull import pull_from_docentry

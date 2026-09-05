@@ -52,6 +52,12 @@
   "column_break_pull",
   "default_source_warehouse",
   "last_transfer_docentry",
+  "section_document_pull",
+  "pull_sap_invoices",
+  "pull_sap_payments",
+  "column_break_document_pull",
+  "document_pull_from_date",
+  "pull_invoice_updates_stock",
   "section_mapping",
   "warehouse_mappings",
   "section_tax_mapping",
@@ -357,6 +363,45 @@
    "fieldname": "last_transfer_docentry",
    "fieldtype": "Int",
    "label": "Start From DocEntry"
+  },
+  {
+   "description": "For order selling, where SAP raises the paperwork: the order goes to SAP, SAP delivers and invoices it, and SAP takes the money. These bring the invoice and the payment back so ERPNext shows what each customer owes. Anything that started in ERPNext is recognised and never pulled back as a duplicate. Runs hourly, and on the 'Pull SAP Documents' button.",
+   "fieldname": "section_document_pull",
+   "fieldtype": "Section Break",
+   "label": "Document Pull (SAP → ERPNext)"
+  },
+  {
+   "default": "0",
+   "description": "Invoices raised in SAP become submitted Sales Invoices here. Line prices come across net and the VAT is added from the Tax Mapping below, so an unmapped VAT group gives an invoice for the wrong money — the log says so when the totals disagree.",
+   "fieldname": "pull_sap_invoices",
+   "fieldtype": "Check",
+   "label": "Pull Invoices Raised in SAP"
+  },
+  {
+   "default": "0",
+   "description": "Customer payments taken in SAP become submitted Payment Entries here, allocated against the invoices SAP applied them to. The bank or cash account is found by its SAP G/L code, so set 'SAP G/L Account' on the ERPNext account the money lands in.",
+   "fieldname": "pull_sap_payments",
+   "fieldtype": "Check",
+   "label": "Pull Payments Taken in SAP"
+  },
+  {
+   "fieldname": "column_break_document_pull",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.pull_sap_invoices || doc.pull_sap_payments",
+   "description": "Documents dated before this are ignored, so switching the pull on does not drag in years of SAP history. Empty means the Go-Live Date above.",
+   "fieldname": "document_pull_from_date",
+   "fieldtype": "Date",
+   "label": "Pull Documents From"
+  },
+  {
+   "default": "0",
+   "depends_on": "pull_sap_invoices",
+   "description": "Leave OFF. In this flow SAP's delivery note is what takes the goods out of stock, so a pulled invoice that also moved stock would relieve the same goods twice. Tick it only where SAP invoices without delivering first.",
+   "fieldname": "pull_invoice_updates_stock",
+   "fieldtype": "Check",
+   "label": "Pulled Invoices Move Stock"
   },
   {
    "fieldname": "section_mapping",

@@ -200,6 +200,19 @@ def _push(doc, endpoint, payload, direction_label):
         return False
 
 
+def came_from_sap(doc):
+    """Does this document already exist in SAP?
+
+    A document pulled FROM SAP is stamped with the DocEntry it already
+    has there. Submitting it would otherwise fire the push hooks and
+    create a SECOND copy of the same invoice or payment in SAP — the
+    round trip closing on itself. A pushed document carries the same
+    stamp, so this doubles as protection against re-pushing one that was
+    submitted, cancelled and submitted again.
+    """
+    return bool((doc.get("custom_sap_docentry") or "").strip())
+
+
 def _guarded(pusher, doc, endpoint):
     """Run a push handler so that NOTHING (including payload-build errors
     like a missing CardCode or warehouse mapping) can abort the
@@ -358,6 +371,8 @@ def on_sales_invoice_submit(doc, method=None):
     flag = "push_credit_notes" if cint(doc.is_return) else "push_sales_invoices"
     if not integration_enabled(flag):
         return
+    if came_from_sap(doc):
+        return
     _guarded(push_sales_invoice_doc, doc,
              "CreditNotes" if cint(doc.is_return) else "Invoices")
 
@@ -498,6 +513,8 @@ def on_payment_entry_submit(doc, method=None):
     if not integration_enabled("push_incoming_payments"):
         return
     if doc.payment_type != "Receive" or doc.party_type != "Customer":
+        return
+    if came_from_sap(doc):
         return
     _guarded(push_payment_entry_doc, doc, "IncomingPayments")
 
