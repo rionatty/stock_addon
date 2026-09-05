@@ -190,6 +190,17 @@
  },
  {
   "doctype": "Custom Field",
+  "name": "Sales Person-custom_sap_sales_employee_code",
+  "dt": "Sales Person",
+  "fieldname": "custom_sap_sales_employee_code",
+  "label": "SAP Sales Employee Code",
+  "fieldtype": "Data",
+  "insert_after": "custom_route_names",
+  "description": "SAP SalesEmployeeCode for this rep. It is what ties SAP's sales employee to THIS record, so customers assigned to them in SAP land on this route instead of on a second Sales Person created from SAP's spelling of the name. Filled in automatically when the names match; set it by hand when they do not.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
   "name": "Material Request-custom_van_request",
   "dt": "Material Request",
   "fieldname": "custom_van_request",

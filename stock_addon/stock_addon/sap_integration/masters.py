@@ -571,31 +571,121 @@ def sync_currencies():
 
 # ------------------------------------------------------- sales persons
 def sync_sales_persons(client=None):
-    """Returns {SalesEmployeeCode: ERPNext Sales Person name}."""
+    """Returns {SalesEmployeeCode: ERPNext Sales Person name}.
+
+    Existing records win. A route is set up here once — WAKISO-ROUTE with
+    its van warehouse, serving warehouse, cash account, route names and
+    employee link — and creating a second Sales Person from SAP's own
+    spelling of the name would leave two records for one rep, only one of
+    which the app can use. So a SAP employee is matched to what is already
+    here: first on the SAP code stamped on the record, then on the name
+    (case and spacing folded), and a new record only when neither finds
+    anything.
+
+    A match by name stamps the code onto the record, so the link survives
+    somebody renaming the rep on either side.
+    """
     client = client or SAPClient()
     rows = client.get_all("SalesPersons", params={
         "$select": "SalesEmployeeCode,SalesEmployeeName,Active",
     })
     root = _root_group("Sales Person", "parent_sales_person")
+
+    # The code field arrives with the fixtures; a sync running before they
+    # are applied must fall back to matching on the name rather than
+    # blowing up on an unknown column.
+    has_code = bool(frappe.get_meta("Sales Person").get_field("custom_sap_sales_employee_code"))
+
+    fields = ["name", "sales_person_name"]
+    if has_code:
+        fields.append("custom_sap_sales_employee_code")
+    known = frappe.get_all("Sales Person", fields=fields)
+
+    by_code = {
+        str(r.get("custom_sap_sales_employee_code")).strip(): r.name
+        for r in known
+        if (r.get("custom_sap_sales_employee_code") or "").strip()
+    }
+    by_name = {}
+    for r in known:
+        for candidate in (r.sales_person_name, r.name):
+            key = _normalise(candidate)
+            if key:
+                by_name.setdefault(key, r.name)
+
     mapping = {}
     for row in rows:
         code = row.get("SalesEmployeeCode")
         name = (row.get("SalesEmployeeName") or "").strip()
         if not name or code in (None, -1):  # -1 = "No Sales Employee"
             continue
-        if not frappe.db.exists("Sales Person", name):
-            doc = frappe.get_doc({
-                "doctype": "Sales Person",
-                "sales_person_name": name,
-                "parent_sales_person": root,
-                "is_group": 0,
-                "enabled": 1 if row.get("Active") in (None, "tYES") else 0,
-            })
-            # don't auto-provision a cost center/warehouse per synced rep
-            doc.flags.skip_auto_provision = True
-            doc.insert(ignore_permissions=True)
-        mapping[code] = name
+
+        existing = by_code.get(str(code).strip()) or by_name.get(_normalise(name))
+        if existing:
+            if not (frappe.db.get_value("Sales Person", existing,
+                                        "custom_sap_sales_employee_code") or "").strip():
+                frappe.db.set_value("Sales Person", existing,
+                                    "custom_sap_sales_employee_code", str(code),
+                                    update_modified=False)
+            mapping[code] = existing
+            continue
+
+        doc = frappe.get_doc({
+            "doctype": "Sales Person",
+            "sales_person_name": name,
+            "parent_sales_person": root,
+            "is_group": 0,
+            "enabled": 1 if row.get("Active") in (None, "tYES") else 0,
+            "custom_sap_sales_employee_code": str(code),
+        })
+        # don't auto-provision a cost center/warehouse per synced rep
+        doc.flags.skip_auto_provision = True
+        doc.insert(ignore_permissions=True)
+        by_code[str(code)] = doc.name
+        by_name.setdefault(_normalise(name), doc.name)
+        mapping[code] = doc.name
+
     return mapping
+
+
+def _set_customer_sales_team(customer, sales_person):
+    """Point a customer's Sales Team at one rep, at 100%.
+
+    This is the field that matters. custom_sap_salesperson records SAP's
+    answer but nothing reads it: the Sales Pro app filters customers with
+    ['sales_team.sales_person', '=', <rep>], the Customers tab on Sales
+    Person reads the same table, and a Sales Order picks its sales team up
+    from there too. Writing only the custom field left every one of them
+    blank.
+
+    Written as child rows rather than through a document save because this
+    runs for every customer on an hourly sync — a save would re-validate
+    and re-version each one. SAP owns the whole table here (one rep, at
+    100%), so there is nothing a save would add. ERPNext requires the
+    percentages to total exactly 100, which one row at 100 satisfies.
+
+    Returns 1 when something changed.
+    """
+    rows = frappe.get_all(
+        "Sales Team",
+        filters={"parenttype": "Customer", "parent": customer},
+        fields=["name", "sales_person", "allocated_percentage"],
+    )
+    if (len(rows) == 1 and rows[0].sales_person == sales_person
+            and flt(rows[0].allocated_percentage) == 100):
+        return 0
+
+    frappe.db.delete("Sales Team", {"parenttype": "Customer", "parent": customer})
+    frappe.get_doc({
+        "doctype": "Sales Team",
+        "parenttype": "Customer",
+        "parent": customer,
+        "parentfield": "sales_team",
+        "sales_person": sales_person,
+        "allocated_percentage": 100,
+        "idx": 1,
+    }).insert(ignore_permissions=True)
+    return 1
 
 
 # ----------------------------------------------------------- customers
@@ -650,6 +740,7 @@ def _sync_customers():
     default_customer_group = settings.default_customer_group or _first_leaf("Customer Group")
     territory = settings.default_territory or _first_leaf("Territory")
     renamed = 0
+    reassigned = 0
 
     created = updated = 0
     for row in rows:
@@ -708,6 +799,12 @@ def _sync_customers():
                     frappe.db.get_value("Customer", existing, "customer_group") != resolved_group:
                 values["customer_group"] = resolved_group
             frappe.db.set_value("Customer", existing, values, update_modified=False)
+            # SAP is the master where it actually names a rep. Where it
+            # names none (SalesPersonCode -1), whatever is on the customer
+            # stays — an hourly sync must not quietly undo an assignment
+            # made on the Sales Person's Customers tab.
+            if sales_person:
+                reassigned += _set_customer_sales_team(existing, sales_person)
             updated += 1
             continue
 
@@ -721,6 +818,9 @@ def _sync_customers():
             "custom_sap_cardcode": card_code,
             "custom_sap_salesperson": sales_person,
             "default_price_list": price_list,
+            # the table the app, the Customers tab and Sales Orders read
+            "sales_team": ([{"sales_person": sales_person, "allocated_percentage": 100}]
+                           if sales_person else []),
         })
         doc.flags.ignore_mandatory = True
         # set_name pins the docname to the SAP CardCode, bypassing the
@@ -729,7 +829,8 @@ def _sync_customers():
         created += 1
 
     msg = _("Customers synced from SAP: {0} created, {1} updated, {2} renamed to their SAP CardCode, "
-            "{3} scanned").format(created, updated, renamed, len(rows))
+            "{3} put on a sales person's round, {4} scanned").format(
+                created, updated, renamed, reassigned, len(rows))
     log_sap("Masters", "Success", "BusinessPartners", message=msg)
     frappe.db.commit()
     return msg
