@@ -25,7 +25,10 @@ def _js_path(filename):
 
 
 def _upsert(name, dt, view, filename):
-    with open(_js_path(filename)) as f:
+    # Explicit encoding: these files carry em dashes and box-drawing
+    # characters, and a server whose locale is not UTF-8 would fail the
+    # read and take the whole after_migrate hook down with it.
+    with open(_js_path(filename), encoding="utf-8") as f:
         script = f.read()
 
     if frappe.db.exists("Client Script", name):
