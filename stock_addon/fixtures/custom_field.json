@@ -830,10 +830,9 @@
   "name": "Sales Invoice-custom_delivery_proof_section",
   "dt": "Sales Invoice",
   "fieldname": "custom_delivery_proof_section",
-  "label": "Delivery Confirmation",
-  "fieldtype": "Section Break",
-  "insert_after": "custom_sap_docnum",
-  "collapsible": 1,
+  "label": "Delivery",
+  "fieldtype": "Tab Break",
+  "insert_after": "is_discounted",
   "module": "Stock Addon",
   "description": "Who took delivery, and their signature. Captured by the rep in Sales Pro at the point of handover."
  },
