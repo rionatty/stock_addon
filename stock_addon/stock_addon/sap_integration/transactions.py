@@ -200,6 +200,72 @@ def _push(doc, endpoint, payload, direction_label):
         return False
 
 
+# SAP B1 carries five cost-centre dimensions on a document line, named
+# CostingCode..CostingCode5. Each is held against the sales person, since
+# in route selling the rep IS the dimension — their route, their vehicle,
+# their depot.
+COSTING_FIELDS = (
+    ("custom_sap_costing_code",  "CostingCode"),
+    ("custom_sap_costing_code2", "CostingCode2"),
+    ("custom_sap_costing_code3", "CostingCode3"),
+    ("custom_sap_costing_code4", "CostingCode4"),
+    ("custom_sap_costing_code5", "CostingCode5"),
+)
+
+
+def _sales_person_for(doc):
+    """The rep a document belongs to, most direct claim first."""
+    named = (doc.get("sales_person") or "").strip()      # Field Expense
+    if named:
+        return named
+
+    for row in doc.get("sales_team") or []:              # Sales Order / Invoice
+        if row.get("sales_person"):
+            return row.sales_person
+
+    # The customer's own rep — SAP fills this in on every customer sync,
+    # so it answers for documents that carry no sales team of their own.
+    customer = (doc.get("customer") or "").strip()
+    if customer:
+        owner = frappe.db.get_value(
+            "Sales Team",
+            {"parenttype": "Customer", "parent": customer},
+            "sales_person",
+        )
+        if owner:
+            return owner
+
+    # Finally whoever created it: the app signs in as the rep.
+    employee = frappe.db.get_value("Employee", {"user_id": doc.get("owner")}, "name")
+    if employee:
+        return frappe.db.get_value("Sales Person", {"employee": employee}, "name")
+    return None
+
+
+def _costing_codes(doc):
+    """SAP dimension codes to stamp on this document's lines.
+
+    Empty when the rep cannot be resolved or has none set — an absent
+    dimension is left out of the payload entirely rather than sent blank,
+    so SAP applies whatever rule it would have applied anyway.
+    """
+    meta = frappe.get_meta("Sales Person")
+    fields = [erp for erp, _ in COSTING_FIELDS if meta.get_field(erp)]
+    if not fields:
+        return {}                       # fixtures not migrated yet
+
+    sales_person = _sales_person_for(doc)
+    if not sales_person:
+        return {}
+
+    row = frappe.db.get_value("Sales Person", sales_person, fields, as_dict=True) or {}
+    return {
+        sap: (row.get(erp) or "").strip()
+        for erp, sap in COSTING_FIELDS
+        if (row.get(erp) or "").strip()
+    }
+
+
 def came_from_sap(doc):
     """Does this document already exist in SAP?
 
@@ -272,6 +338,7 @@ def push_sales_invoice_doc(doc):
     _assert_items_in_sap(doc)
     vat_group = _vat_group_for(doc)
     tax_inclusive = _is_tax_inclusive(doc)
+    costing = _costing_codes(doc)
     lines = []
     for item in doc.items:
         line = {
@@ -294,6 +361,7 @@ def push_sales_invoice_doc(doc):
         batches = _batch_numbers_for_row(item)
         if batches:
             line["BatchNumbers"] = batches
+        line.update(costing)
         lines.append(line)
 
     payload = {
@@ -319,6 +387,7 @@ def push_sales_order_doc(doc):
     _assert_items_in_sap(doc)
     vat_group = _vat_group_for(doc)
     tax_inclusive = _is_tax_inclusive(doc)
+    costing = _costing_codes(doc)
 
     lines = []
     for item in doc.items:
@@ -338,6 +407,7 @@ def push_sales_order_doc(doc):
         # per-line promise date; SAP keeps its own line ship dates
         if item.get("delivery_date"):
             line["ShipDate"] = str(item.delivery_date)
+        line.update(costing)
         lines.append(line)
 
     payload = {
@@ -613,25 +683,26 @@ def on_payment_entry_submit(doc, method=None):
 # ------------------------------------------------------ expense as JV
 def push_field_expense_doc(doc):
     # SAP B1 Memo/LineMemo columns are nvarchar(50) — hard limit.
+    costing = _costing_codes(doc)
     lines, total = [], 0.0
     for row in doc.expense_items:
         if flt(row.amount) <= 0:  # mirror make_journal_entry's > 0 filter
             continue
-        lines.append({
+        lines.append(dict({
             "AccountCode": _account_code(row.expense_account),
             "Debit": flt(row.amount),
             "Credit": 0,
             "LineMemo": (row.description or row.expense_type or doc.name)[:50],
-        })
+        }, **costing))
         total += flt(row.amount)
     if not lines:
         raise SAPError(f"Field Expense {doc.name} has no positive expense lines to post.")
-    lines.append({
+    lines.append(dict({
         "AccountCode": _account_code(doc.paid_from_account),
         "Debit": 0,
         "Credit": total,
         "LineMemo": f"Field Expense {doc.name}"[:50],
-    })
+    }, **costing))
 
     payload = {
         "ReferenceDate": str(doc.expense_date),

@@ -749,5 +749,80 @@
   "insert_after": "custom_customers_tab",
   "description": "Customers assigned to this sales person, i.e. carrying them in the customer's Sales Team. This is the same assignment the Sales Pro app filters on, so a customer added here appears on the rep's phone.",
   "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_sap_cost_centres_tab",
+  "dt": "Sales Person",
+  "fieldname": "custom_sap_cost_centres_tab",
+  "label": "SAP Cost Centres",
+  "fieldtype": "Tab Break",
+  "insert_after": "custom_customer_list",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_sap_costing_intro",
+  "dt": "Sales Person",
+  "fieldname": "custom_sap_costing_intro",
+  "fieldtype": "HTML",
+  "insert_after": "custom_sap_cost_centres_tab",
+  "options": "<p class=\"text-muted small\">SAP B1 carries up to five cost-centre dimensions on every document line. Whatever is filled in here is stamped on the lines of the Sales Orders, Invoices, Credit Notes and Expense Journals this sales person's documents create in SAP. Leave a box empty and that dimension is simply not sent, so SAP applies its own rule. Which dimension is which is set in SAP under Financials &rarr; Dimensions.</p>",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_sap_costing_code",
+  "dt": "Sales Person",
+  "fieldname": "custom_sap_costing_code",
+  "label": "SAP Cost Centre 1",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_costing_intro",
+  "description": "SAP dimension 1 code (CostingCode) — the OcrCode as it appears in SAP, not the ERPNext cost centre name.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_sap_costing_code2",
+  "dt": "Sales Person",
+  "fieldname": "custom_sap_costing_code2",
+  "label": "SAP Cost Centre 2",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_costing_code",
+  "description": "SAP dimension 2 code (CostingCode2) — the OcrCode as it appears in SAP, not the ERPNext cost centre name.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_sap_costing_code3",
+  "dt": "Sales Person",
+  "fieldname": "custom_sap_costing_code3",
+  "label": "SAP Cost Centre 3",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_costing_code2",
+  "description": "SAP dimension 3 code (CostingCode3) — the OcrCode as it appears in SAP, not the ERPNext cost centre name.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_sap_costing_code4",
+  "dt": "Sales Person",
+  "fieldname": "custom_sap_costing_code4",
+  "label": "SAP Cost Centre 4",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_costing_code3",
+  "description": "SAP dimension 4 code (CostingCode4) — the OcrCode as it appears in SAP, not the ERPNext cost centre name.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Person-custom_sap_costing_code5",
+  "dt": "Sales Person",
+  "fieldname": "custom_sap_costing_code5",
+  "label": "SAP Cost Centre 5",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_costing_code4",
+  "description": "SAP dimension 5 code (CostingCode5) — the OcrCode as it appears in SAP, not the ERPNext cost centre name.",
+  "module": "Stock Addon"
  }
 ]
