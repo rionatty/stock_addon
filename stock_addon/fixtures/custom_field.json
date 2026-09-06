@@ -824,5 +824,63 @@
   "insert_after": "custom_sap_costing_code4",
   "description": "SAP dimension 5 code (CostingCode5) — the OcrCode as it appears in SAP, not the ERPNext cost centre name.",
   "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_delivery_proof_section",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_delivery_proof_section",
+  "label": "Delivery Confirmation",
+  "fieldtype": "Section Break",
+  "insert_after": "custom_sap_docnum",
+  "collapsible": 1,
+  "module": "Stock Addon",
+  "description": "Who took delivery, and their signature. Captured by the rep in Sales Pro at the point of handover."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_receiver_name",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_receiver_name",
+  "label": "Receiver Name",
+  "fieldtype": "Data",
+  "insert_after": "custom_delivery_proof_section",
+  "module": "Stock Addon",
+  "description": "Name of the person who received the goods."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_receiver_signature",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_receiver_signature",
+  "label": "Receiver Signature",
+  "fieldtype": "Attach Image",
+  "insert_after": "custom_receiver_name",
+  "module": "Stock Addon",
+  "description": "Signature captured at handover, attached as an image."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_sales_pro_reference",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_sales_pro_reference",
+  "label": "Sales Pro Reference",
+  "fieldtype": "Data",
+  "insert_after": "custom_receiver_signature",
+  "module": "Stock Addon",
+  "description": "The document's own number in the Sales Pro app — what the rep sees on their phone, including the offline number it was given before it reached ERPNext. Lets a document here be traced back to the one they raised. Not unique: offline numbers are issued per device, so two reps can produce the same one.",
+  "in_standard_filter": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Material Request-custom_sales_pro_reference",
+  "dt": "Material Request",
+  "fieldname": "custom_sales_pro_reference",
+  "label": "Sales Pro Reference",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_docnum",
+  "module": "Stock Addon",
+  "description": "The document's own number in the Sales Pro app — what the rep sees on their phone, including the offline number it was given before it reached ERPNext. Lets a document here be traced back to the one they raised. Not unique: offline numbers are issued per device, so two reps can produce the same one.",
+  "in_standard_filter": 1
  }
 ]
