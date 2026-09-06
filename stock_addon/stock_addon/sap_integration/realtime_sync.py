@@ -43,6 +43,7 @@ from frappe.utils import cint
 from stock_addon.stock_addon.sap_integration.connection import (
     get_settings,
     integration_enabled,
+    log_sap,
     single_flight,
 )
 
@@ -96,6 +97,11 @@ def tick():
             elapsed += beat
 
 
+# Endpoint names for the log, so a failure here reads the same as one
+# raised deeper in the pull it was calling.
+STREAM_ENDPOINT = {"transfers": "InventoryTransfers", "documents": "Documents"}
+
+
 def _run(label, poller, stopped):
     """Run one stream.
 
@@ -104,12 +110,20 @@ def _run(label, poller, stopped):
     an unreachable SAP, or a mapping that is wrong, fails identically on
     every pass, and retrying it eleven more times inside one minute is
     just load. The next minute starts clean.
+
+    The failure goes to the SAP Integration Log as well as the Error Log.
+    A pull that gets far enough logs its own failures there; one that
+    cannot even reach SAP throws before it can, and that is exactly the
+    failure someone is looking for when they open that log.
     """
     try:
         poller()
     except Exception:
         stopped.add(label)
-        frappe.log_error(frappe.get_traceback(), f"SAP realtime sync: {label}")
+        trace = frappe.get_traceback()
+        frappe.log_error(trace, f"SAP realtime sync: {label}")
+        log_sap("Pull", "Failed", STREAM_ENDPOINT.get(label, label),
+                message=trace[-2000:])
 
 
 def _poll_transfers():

@@ -27,7 +27,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate
 
 from stock_addon.stock_addon.sap_integration.connection import (
     SAPClient,
@@ -447,6 +447,57 @@ def on_material_request_submit(doc, method=None):
 
 
 # --------------------------------------------------- incoming payments
+def _sap_date(value):
+    """A date SAP will read the same way every time.
+
+    str() on a date already gives ISO, but a value that reached the
+    document as a string can arrive as '2026-9-6' and go out unpadded.
+    OData wants yyyy-MM-dd, so normalise rather than hope.
+    """
+    if not value:
+        return None
+    try:
+        return getdate(value).isoformat()
+    except Exception:
+        return str(value)
+
+
+def _sap_invoice_state(docentries):
+    """What SAP currently thinks of these invoices.
+
+    Returns {DocEntry: {"closed": bool, "open": float}}. Amounts are in
+    local currency (DocTotal / PaidToDate), which is what CashSum and
+    SumApplied are in too.
+
+    Worth the extra round trip: SAP rejects a whole payment with -10
+    "Invoice is already closed or blocked" if ONE line names an invoice
+    that has since been settled or cancelled there, and the rejection
+    does not say which. Asking first turns that into a payment that
+    posts, applying what can still be applied.
+    """
+    entries = sorted({cint(e) for e in docentries if cint(e)})
+    if not entries:
+        return {}
+
+    state = {}
+    client = SAPClient()
+    for start in range(0, len(entries), 20):    # keep each $filter sane
+        chunk = entries[start:start + 20]
+        expression = " or ".join(f"DocEntry eq {entry}" for entry in chunk)
+        rows = client.get_all("Invoices", params={
+            "$select": "DocEntry,DocumentStatus,DocTotal,PaidToDate,Cancelled",
+            "$filter": expression,
+        })
+        for row in rows:
+            open_amount = flt(row.get("DocTotal")) - flt(row.get("PaidToDate"))
+            state[cint(row.get("DocEntry"))] = {
+                "closed": (row.get("DocumentStatus") == "bost_Close"
+                           or row.get("Cancelled") == "tYES"),
+                "open": open_amount,
+            }
+    return state
+
+
 def push_payment_entry_doc(doc):
     settings = get_settings()
 
@@ -467,44 +518,84 @@ def push_payment_entry_doc(doc):
     is_bank = frappe.db.get_value("Account", doc.get("paid_to"), "account_type") == "Bank"
     payload = {
         "CardCode": _cardcode(doc.party),
-        "DocDate": str(doc.posting_date),
+        "DocDate": _sap_date(doc.posting_date),
         "Remarks": f"ERPNext {doc.name}"[:250],
     }
     if is_bank:
         payload["TransferAccount"] = account_code
         payload["TransferSum"] = flt(doc.paid_amount)
-        payload["TransferDate"] = str(doc.get("reference_date") or doc.posting_date)
+        payload["TransferDate"] = _sap_date(doc.get("reference_date") or doc.posting_date)
         if doc.get("reference_no"):
             payload["TransferReference"] = str(doc.reference_no)[:50]
     else:
         payload["CashAccount"] = account_code
         payload["CashSum"] = flt(doc.paid_amount)
 
-    # Apply against synced A/R invoices. Credit notes (is_return) and
-    # invoices that never reached SAP are left out; if ANY reference is
-    # unmappable the whole payment goes on account instead — a partial
-    # PaymentInvoices list would silently mis-apply the difference.
-    invoices, unmappable = [], False
+    # Which ERPNext references could point at a SAP invoice at all.
+    # Credit notes (is_return) and invoices that never reached SAP cannot.
+    wanted, unmapped = [], []
     for ref in doc.get("references", []):
         if ref.reference_doctype != "Sales Invoice":
-            unmappable = True
+            unmapped.append(f"{ref.reference_doctype} {ref.reference_name}")
             continue
         docentry, is_return = frappe.db.get_value(
             "Sales Invoice", ref.reference_name, ["custom_sap_docentry", "is_return"]
         ) or (None, 0)
-        if cint(is_return):
-            unmappable = True
+        if cint(is_return) or not docentry:
+            unmapped.append(ref.reference_name)
             continue
-        if docentry:
-            invoices.append({
-                "DocEntry": cint(docentry),
-                "SumApplied": flt(ref.allocated_amount),
-                "InvoiceType": "it_Invoice",
-            })
-        else:
-            unmappable = True
-    if invoices and not unmappable:
+        wanted.append((cint(docentry), flt(ref.allocated_amount), ref.reference_name))
+
+    # Ask SAP what is still open before applying anything. A single line
+    # naming a settled invoice makes SAP reject the ENTIRE payment.
+    state = {}
+    if wanted:
+        try:
+            state = _sap_invoice_state(entry for entry, _amount, _name in wanted)
+        except Exception as e:
+            # Reading failed — post the allocation as ERPNext has it
+            # rather than silently changing where the money goes.
+            log_sap("Push", "Warning", "IncomingPayments", doc.doctype, doc.name, message=(
+                f"Could not read invoice status from SAP ({str(e)[:200]}); applying the "
+                "ERPNext allocation unchecked. If SAP rejects it as closed or blocked, "
+                "retry once the read works."))
+
+    invoices, notes = [], list(unmapped and [f"not in SAP: {', '.join(unmapped)}"] or [])
+    for entry, amount, name in wanted:
+        info = state.get(entry)
+        if info is None:                       # unverified — apply as asked
+            invoices.append({"DocEntry": entry, "SumApplied": amount,
+                             "InvoiceType": "it_Invoice"})
+            continue
+        if info["closed"]:
+            notes.append(f"{name} (SAP {entry}) is closed or cancelled in SAP")
+            continue
+        applied = min(amount, info["open"])
+        if applied <= 0:
+            notes.append(f"{name} (SAP {entry}) has nothing left owing in SAP")
+            continue
+        if applied < amount:
+            notes.append(f"{name} (SAP {entry}) capped to {applied} — only that much is "
+                         f"still open in SAP")
+        invoices.append({"DocEntry": entry, "SumApplied": applied,
+                         "InvoiceType": "it_Invoice"})
+
+    if invoices:
         payload["PaymentInvoices"] = invoices
+
+    # Whatever is not applied — surplus, or an invoice SAP has already
+    # settled — is deliberately left off. SAP then posts the difference
+    # ON ACCOUNT against the customer, which is what a customer paying
+    # more than they were invoiced should produce. Say so, because the
+    # SAP payment will not match the ERPNext allocation line for line.
+    applied_total = sum(flt(line["SumApplied"]) for line in invoices)
+    on_account = flt(doc.paid_amount) - applied_total
+    if on_account > 0.005:
+        notes.append(f"{on_account} left unapplied — SAP posts it on account for "
+                     f"{payload['CardCode']}")
+    if notes:
+        log_sap("Push", "Warning", "IncomingPayments", doc.doctype, doc.name,
+                message=("Payment {0}: ".format(doc.name) + "; ".join(notes)))
 
     return _push(doc, "IncomingPayments", payload, _("Incoming Payment"))
 
