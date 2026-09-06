@@ -35,6 +35,8 @@ from stock_addon.stock_addon.sap_integration.connection import (
     get_settings,
     integration_enabled,
     log_sap,
+    note_pushed,
+    note_sending,
 )
 
 
@@ -171,9 +173,14 @@ def _batch_numbers_for_row(item):
 
 def _push(doc, endpoint, payload, direction_label):
     """POST one document; stamp + log both outcomes. Returns True on success."""
+    # Claimed before the POST, not after: SAP creates its copy while we are
+    # still waiting on the response, and the pull can see it in that gap.
+    # Everything below this line is uncommitted until the request ends.
+    note_sending(doc.name)
     try:
         result = SAPClient().post(endpoint, payload)
         docentry, docnum = result.get("DocEntry"), result.get("DocNum")
+        note_pushed(endpoint, docentry, doc.name)
         _stamp(doc, "Synced", docentry, docnum)
         log_sap("Push", "Success", endpoint, doc.doctype, doc.name, docentry,
                 f"{direction_label} pushed to SAP (DocNum {docnum})")

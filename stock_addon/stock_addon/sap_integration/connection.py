@@ -79,6 +79,62 @@ class single_flight:
         return False
 
 
+# ------------------------------------------------- round-trip guarding
+#
+# A document pushed to SAP is invisible to the pull until its request
+# commits — and the push itself holds that request open for the whole SAP
+# round trip, up to 25 seconds. The mobile app posts invoices with
+# docstatus 1, so the insert and the push share one request: for that
+# whole window SAP has the document and the database does not, and a pull
+# running in another worker sees a SAP invoice it can find no trace of
+# here. It then imports it, and the invoice exists twice.
+#
+# Redis is not transactional, so a note written here is visible to the
+# polling worker at once. That is the only thing that closes the window;
+# every database check, however well written, cannot see uncommitted rows.
+PUSHED_TTL = 7 * 24 * 3600      # long enough to outlive any scan window
+SENDING_TTL = 30 * 60           # a push that takes longer has failed
+
+
+def _pushed_key(endpoint, docentry):
+    return f"sap_pushed:{endpoint}:{docentry}"
+
+
+def _sending_key(reference):
+    return f"sap_sending:{reference}"
+
+
+def note_sending(reference):
+    """Claim a document BEFORE the POST.
+
+    SAP creates its copy while we are still waiting on the response, so
+    there is a moment when the pull can see it and we do not yet know its
+    DocEntry. The claim is keyed by the ERPNext name, which is what the
+    push puts in NumAtCard, so the pull can match on that instead.
+    """
+    if reference:
+        frappe.cache().set_value(_sending_key(reference), 1, expires_in_sec=SENDING_TTL)
+
+
+def note_pushed(endpoint, docentry, reference=None):
+    """Record the DocEntry SAP gave us, the moment it gives it."""
+    if docentry is not None:
+        frappe.cache().set_value(_pushed_key(endpoint, docentry),
+                                 reference or "1", expires_in_sec=PUSHED_TTL)
+
+
+def pushed_from_here(endpoint, docentry=None, reference=None):
+    """Did this SAP document originate in ERPNext moments ago?
+
+    Checked by the pull in addition to the database, not instead of it:
+    the database is the durable answer and this is the one that works
+    before the commit.
+    """
+    if docentry is not None and frappe.cache().get_value(_pushed_key(endpoint, docentry)):
+        return True
+    return bool(reference and frappe.cache().get_value(_sending_key(reference)))
+
+
 def log_sap(direction, status, endpoint, reference_doctype=None,
             reference_name=None, sap_docentry=None, message=""):
     """Write one SAP Integration Log row. Never raises."""

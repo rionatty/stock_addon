@@ -39,6 +39,7 @@ from stock_addon.stock_addon.sap_integration.connection import (
     get_settings,
     integration_enabled,
     log_sap,
+    pushed_from_here,
     single_flight,
 )
 
@@ -60,6 +61,18 @@ def _since(settings):
 
 def _scan_limit(settings):
     return cint(settings.get("pull_scan_limit")) or DEFAULT_SCAN
+
+
+def _origin_reference(text):
+    """The ERPNext document name a SAP remark was stamped with.
+
+    The push writes "ERPNext <name>" — anything else is a remark somebody
+    typed in SAP and names nothing here.
+    """
+    words = (text or "").strip().split()
+    if len(words) >= 2 and words[0] == "ERPNext":
+        return words[1].strip()
+    return None
 
 
 def _item_for(sap_code):
@@ -174,6 +187,13 @@ def _handle_invoice(row, settings):
     origin = (row.get("NumAtCard") or "").strip()
     if origin and frappe.db.exists("Sales Invoice", origin):
         return "skipped", _("originated in ERPNext")
+    # The same question again, asked where an answer exists BEFORE the
+    # pushing request commits. The app posts invoices with docstatus 1, so
+    # the insert and the SAP push share one request: for the length of
+    # that round trip SAP has the invoice and the database does not, and
+    # the two checks above can only say "never seen it".
+    if pushed_from_here("Invoices", docentry, origin):
+        return "skipped", _("pushed from here, still committing")
 
     customer = _customer_for(row.get("CardCode"))
     if not customer:
@@ -321,6 +341,15 @@ def _handle_payment(row, settings):
         return "skipped", _("not a customer payment")
     if frappe.db.exists("Payment Entry", {"custom_sap_docentry": str(docentry)}):
         return "skipped", _("already pulled")
+    # A payment has no NumAtCard; the push writes "ERPNext <name>" into
+    # Remarks, which is the only thing on the SAP side that names its
+    # origin. Same two answers as the invoice: the durable one, then the
+    # one that works while the pushing request is still open.
+    origin = _origin_reference(row.get("Remarks"))
+    if origin and frappe.db.exists("Payment Entry", origin):
+        return "skipped", _("originated in ERPNext")
+    if pushed_from_here("IncomingPayments", docentry, origin):
+        return "skipped", _("pushed from here, still committing")
 
     customer = _customer_for(row.get("CardCode"))
     if not customer:
