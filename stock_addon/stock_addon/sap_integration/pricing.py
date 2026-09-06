@@ -113,17 +113,23 @@ def _item_price_has(field):
 ITEM_PRICE_KEY = ("uom", "valid_from", "valid_upto", "customer", "supplier",
                   "batch_no", "packing_unit")
 
+# Fixed identifier: frappe interpolates savepoint names straight into SQL.
+ITEM_PRICE_SAVEPOINT = "stock_addon_item_price"
 
-def _same_key(row, wanted):
+
+def _same_key(row, wanted, skip=()):
     """Compare on ERPNext's terms: an unset field matches NULL *or* empty.
 
-    This is the whole reason the sync used to fail with "Item Price
-    appears multiple times". Looking a row up with customer="" never
-    matched the row already stored with customer NULL, so a second one
-    was inserted — and ERPNext, which treats the two as equal, rejected
-    it. The insert failed on the duplicate we had just failed to find.
+    Predicting what ERPNext will store has been wrong three times now —
+    customer arrived as NULL where we looked for "", uom is fetched from
+    the item's stock UOM before the check runs, and valid_from defaults
+    to today. Fields in `skip` are ones we did not ask for and therefore
+    cannot predict; _find_clash below is what catches anything still
+    mis-modelled, by asking after the fact instead of guessing before.
     """
     for field in ITEM_PRICE_KEY:
+        if field in skip:
+            continue
         ours, theirs = wanted.get(field), row.get(field)
         if field == "packing_unit":
             if flt(ours) != flt(theirs):
@@ -132,6 +138,31 @@ def _same_key(row, wanted):
         if (ours or "") != (theirs or ""):
             return False
     return True
+
+
+def _candidates(item_code, price_list, supports_min_qty):
+    return frappe.get_all(
+        "Item Price",
+        filters={"item_code": item_code, "price_list": price_list},
+        fields=["name", "price_list_rate"] + list(ITEM_PRICE_KEY)
+        + (["min_qty"] if supports_min_qty else []),
+    )
+
+
+def _find_clash(doc):
+    """The stored row ERPNext just called a duplicate of `doc`.
+
+    Read from the DOCUMENT's own values, not from what we meant to write:
+    by the time check_duplicates throws, frappe has already fetched uom
+    from the item and stamped valid_from with today's default, and those
+    resolved values are what it compared. Asking the document is the one
+    version of the key that cannot drift from ERPNext's.
+    """
+    wanted = {field: doc.get(field) for field in ITEM_PRICE_KEY}
+    for row in _candidates(doc.item_code, doc.price_list, False):
+        if row.name != doc.name and _same_key(row, wanted):
+            return row
+    return None
 
 
 def _upsert_item_price(item_code, price_list, rate, customer=None,
@@ -180,25 +211,26 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
         "batch_no": None,
         "packing_unit": 0,
     }
-    candidates = frappe.get_all(
-        "Item Price",
-        filters={"item_code": item_code, "price_list": price_list},
-        fields=["name", "price_list_rate"] + list(ITEM_PRICE_KEY)
-        + (["min_qty"] if supports_min_qty else []),
-    )
+    # valid_from defaults to Today, so a row written on any earlier run
+    # carries that run's date. Matching on it would miss the row and add
+    # a fresh one every day the sync runs; when we did not ask for a date
+    # we ignore whichever one is stored.
+    skip = ("valid_from",) if not valid_from else ()
+
+    # Compare rates at the field's own precision. Plain float equality
+    # calls 1000.0 and 1000.0000001 different, which rewrites rows on
+    # every run and reports price changes that never happened.
+    precision = frappe.get_precision("Item Price", "price_list_rate") or 2
+
     existing = None
-    for row in candidates:
+    for row in _candidates(item_code, price_list, supports_min_qty):
         if supports_min_qty and flt(row.get("min_qty")) != flt(min_qty):
             continue
-        if _same_key(row, wanted):
+        if _same_key(row, wanted, skip=skip):
             existing = row
             break
 
     if existing:
-        # Compare at the field's own precision. Plain float equality calls
-        # 1000.0 and 1000.0000001 different and rewrites the row on every
-        # run, which reports price changes that never happened.
-        precision = frappe.get_precision("Item Price", "price_list_rate") or 2
         if flt(existing.price_list_rate, precision) == flt(rate, precision):
             return None                       # already right — leave it alone
         frappe.db.set_value("Item Price", existing.name, "price_list_rate", flt(rate),
@@ -222,7 +254,26 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
         payload["min_qty"] = flt(min_qty)
     doc = frappe.get_doc(payload)
     doc.flags.ignore_permissions = True
-    doc.insert(ignore_permissions=True)
+
+    # If ERPNext still considers this a duplicate, believe it rather than
+    # our model of its rules, and update the row it points at. One item
+    # raising this used to kill the whole item_prices stage — thousands
+    # of good prices lost to one row we could not predict.
+    frappe.db.savepoint(ITEM_PRICE_SAVEPOINT)
+    try:
+        doc.insert(ignore_permissions=True)
+    except frappe.ValidationError:
+        frappe.db.rollback(save_point=ITEM_PRICE_SAVEPOINT)
+        clash = _find_clash(doc)
+        if not clash:
+            raise                    # a different validation problem — say so
+        frappe.clear_last_message()
+        if flt(clash.price_list_rate, precision) == flt(rate, precision):
+            return None
+        frappe.db.set_value("Item Price", clash.name, "price_list_rate", flt(rate),
+                            update_modified=False)
+        return "updated"
+    frappe.db.release_savepoint(ITEM_PRICE_SAVEPOINT)
     return "added"
 
 
