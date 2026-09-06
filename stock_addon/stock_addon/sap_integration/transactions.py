@@ -249,6 +249,47 @@ def _sales_person_for(doc):
     return None
 
 
+def _set_sales_employee(payload, doc):
+    """Name the rep on a SAP document header.
+
+    Without SalesPersonCode SAP files the document under "No Sales
+    Employee / Buyer", so nothing in SAP can be reported by rep however
+    carefully ERPNext records the sales team. The code is the SAP
+    SalesEmployeeCode held on the Sales Person, and SAP wants it as an
+    integer.
+    """
+    meta = frappe.get_meta("Sales Person")
+    if not meta.get_field("custom_sap_sales_employee_code"):
+        return                                  # fixtures not migrated yet
+
+    sales_person = _sales_person_for(doc)
+    if not sales_person:
+        return
+
+    code = (frappe.db.get_value(
+        "Sales Person", sales_person, "custom_sap_sales_employee_code") or "").strip()
+    if not code:
+        # Say so once an hour per rep: silently filing everything under
+        # "no sales employee" is precisely the failure this prevents, and
+        # a message per document would drown the log.
+        key = f"sap_no_employee_code:{sales_person}"
+        if not frappe.cache().get_value(key):
+            frappe.cache().set_value(key, 1, expires_in_sec=3600)
+            log_sap("Push", "Warning", "SalesPersons", message=(
+                f"Sales Person '{sales_person}' has no SAP Sales Employee Code, so "
+                "documents are reaching SAP under 'No Sales Employee / Buyer'. Run "
+                "'Sync Customers' to match them by name, or fill the code in on the "
+                "sales person."))
+        return
+
+    try:
+        payload["SalesPersonCode"] = int(code)
+    except ValueError:
+        log_sap("Push", "Warning", "SalesPersons", message=(
+            f"Sales Person '{sales_person}' has SAP Sales Employee Code '{code}', "
+            "which is not a number — SAP expects SalesEmployeeCode as an integer."))
+
+
 def _costing_codes(doc):
     """SAP dimension codes to stamp on this document's lines.
 
@@ -379,6 +420,7 @@ def push_sales_invoice_doc(doc):
         "Comments": f"ERPNext {doc.name}"[:254],
         "DocumentLines": lines,
     }
+    _set_sales_employee(payload, doc)
     label = _("Credit Note") if cint(doc.is_return) else _("Sales Invoice")
     return _push(doc, endpoint, payload, label)
 
@@ -426,6 +468,7 @@ def push_sales_order_doc(doc):
         "Comments": f"ERPNext {doc.name}"[:254],
         "DocumentLines": lines,
     }
+    _set_sales_employee(payload, doc)
     # entity naming has bitten us three times — probe rather than assume
     endpoint = SAPClient().probe_entity(("Orders", "SalesOrders")) or "Orders"
     return _push(doc, endpoint, payload, _("Sales Order"))
