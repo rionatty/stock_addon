@@ -25,6 +25,11 @@
   "sync_pricing",
   "customer_code_prefix",
   "auto_sync_masters",
+  "sync_interval_items",
+  "sync_interval_customers",
+  "sync_interval_taxes",
+  "sync_interval_currencies",
+  "sync_interval_pricing",
   "section_push",
   "sales_order_push",
   "push_sales_invoices",
@@ -69,7 +74,7 @@
  "fields": [
   {
    "default": "0",
-   "description": "Master switch \u2014 nothing is pushed or pulled while this is off.",
+   "description": "Master switch — nothing is pushed or pulled while this is off.",
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enable SAP Integration"
@@ -114,7 +119,7 @@
   {
    "fieldname": "section_masters",
    "fieldtype": "Section Break",
-   "label": "Master Data Sync (SAP \u2192 ERPNext)"
+   "label": "Master Data Sync (SAP → ERPNext)"
   },
   {
    "default": "1",
@@ -186,19 +191,59 @@
   },
   {
    "default": "0",
-   "description": "Re-sync items, customers, taxes and currencies every hour automatically.",
+   "description": "Re-sync master data automatically. Each master keeps its own interval below, so the cheap ones can run often without dragging the expensive ones with them. Off means master data only moves when you press its button.",
    "fieldname": "auto_sync_masters",
    "fieldtype": "Check",
-   "label": "Auto-sync Masters Hourly"
+   "label": "Auto-sync Master Data"
+  },
+  {
+   "default": "5",
+   "depends_on": "auto_sync_masters",
+   "description": "How often items are re-synced. The most expensive master: every sales item with its UoM groups. Blank or 0 means 5.",
+   "fieldname": "sync_interval_items",
+   "fieldtype": "Int",
+   "label": "Items Every (Minutes)"
+  },
+  {
+   "default": "5",
+   "depends_on": "auto_sync_masters",
+   "description": "How often customers are re-synced, including which sales person SAP has them on. Blank or 0 means 5.",
+   "fieldname": "sync_interval_customers",
+   "fieldtype": "Int",
+   "label": "Customers Every (Minutes)"
+  },
+  {
+   "default": "5",
+   "depends_on": "auto_sync_masters",
+   "description": "How often SAP VAT codes are re-read into the Tax Mapping table. A handful of rows, so cheap. Blank or 0 means 5.",
+   "fieldname": "sync_interval_taxes",
+   "fieldtype": "Int",
+   "label": "Tax Codes Every (Minutes)"
+  },
+  {
+   "default": "5",
+   "depends_on": "auto_sync_masters",
+   "description": "How often SAP currencies are checked. A handful of rows, so cheap. Blank or 0 means 5.",
+   "fieldname": "sync_interval_currencies",
+   "fieldtype": "Int",
+   "label": "Currencies Every (Minutes)"
+  },
+  {
+   "default": "5",
+   "depends_on": "auto_sync_masters",
+   "description": "How often price lists, item prices and special prices are re-synced. Expensive: it walks every item's price on every list. Blank or 0 means 5.",
+   "fieldname": "sync_interval_pricing",
+   "fieldtype": "Int",
+   "label": "Pricing Every (Minutes)"
   },
   {
    "fieldname": "section_push",
    "fieldtype": "Section Break",
-   "label": "Transaction Push (ERPNext \u2192 SAP)"
+   "label": "Transaction Push (ERPNext → SAP)"
   },
   {
    "default": "On Submit",
-   "description": "When a Sales Order reaches SAP. On Submit sends it the moment it is submitted. Manual Only sends nothing automatically \u2014 use the 'Send to SAP' button on the order, for teams that confirm an order before it becomes an order in SAP. Off never sends it.",
+   "description": "When a Sales Order reaches SAP. On Submit sends it the moment it is submitted. Manual Only sends nothing automatically — use the 'Send to SAP' button on the order, for teams that confirm an order before it becomes an order in SAP. Off never sends it.",
    "fieldname": "sales_order_push",
    "fieldtype": "Select",
    "label": "Send Sales Orders",
@@ -218,7 +263,7 @@
   },
   {
    "default": "1",
-   "description": "Van stock requests (Material Request \u2192 SAP Inventory Transfer Request).",
+   "description": "Van stock requests (Material Request → SAP Inventory Transfer Request).",
    "fieldname": "push_transfer_requests",
    "fieldtype": "Check",
    "label": "Push Stock Transfer Requests"
@@ -298,7 +343,7 @@
   {
    "fieldname": "section_pull",
    "fieldtype": "Section Break",
-   "label": "Van Stock Pull (SAP \u2192 ERPNext)"
+   "label": "Van Stock Pull (SAP → ERPNext)"
   },
   {
    "default": "1",
@@ -309,14 +354,14 @@
   },
   {
    "default": "U_IntegrationNumber",
-   "description": "SAP user field that carries the ERPNext document name onto the transfer request, e.g. MAT-MR-2026-00009. Because SAP copies it to the Stock Transfer, the pull can find exactly the transfers that came from here \u2014 no DocEntry, and it works where a flag added only to the request does not. This is the preferred route; leave empty to fall back to the van flag or a recent scan.",
+   "description": "SAP user field that carries the ERPNext document name onto the transfer request, e.g. MAT-MR-2026-00009. Because SAP copies it to the Stock Transfer, the pull can find exactly the transfers that came from here — no DocEntry, and it works where a flag added only to the request does not. This is the preferred route; leave empty to fall back to the van flag or a recent scan.",
    "fieldname": "integration_number_udf",
    "fieldtype": "Data",
    "label": "Integration Number UDF (SAP)"
   },
   {
    "default": "U_VanRequest",
-   "description": "SAP user field that marks a transfer as van stock. It is set on every transfer request pushed from here, and the pull fetches transfers by it instead of by DocEntry \u2014 so stock arrives without anyone entering a DocEntry. Leave EMPTY to fall back to the DocEntry high-water mark.",
+   "description": "SAP user field that marks a transfer as van stock. It is set on every transfer request pushed from here, and the pull fetches transfers by it instead of by DocEntry — so stock arrives without anyone entering a DocEntry. Leave EMPTY to fall back to the DocEntry high-water mark.",
    "fieldname": "van_request_udf",
    "fieldtype": "Data",
    "label": "Van Request UDF (SAP)"
@@ -330,7 +375,7 @@
   },
   {
    "default": "15",
-   "description": "How often to check SAP, in seconds. Frappe's scheduler only fires once a minute, so anything below 60 makes that job poll repeatedly within its minute \u2014 15 means a transfer posted in SAP appears here within about 15 seconds. The job holds a worker while it polls; set 60 for a single check per minute.",
+   "description": "How often to check SAP, in seconds. Frappe's scheduler only fires once a minute, so anything below 60 makes that job poll repeatedly within its minute — 15 means a transfer posted in SAP appears here within about 15 seconds. The job holds a worker while it polls; set 60 for a single check per minute.",
    "fieldname": "pull_interval_seconds",
    "fieldtype": "Int",
    "label": "Pull Interval (Seconds)"
@@ -446,7 +491,7 @@
    "label": "Tax Mapping"
   },
   {
-   "description": "Filled by 'Sync Taxes'. Link each SAP code to the ERPNext Sales Taxes template it corresponds to \u2014 pushed invoice lines then carry the SAP VatGroup.",
+   "description": "Filled by 'Sync Taxes'. Link each SAP code to the ERPNext Sales Taxes template it corresponds to — pushed invoice lines then carry the SAP VatGroup.",
    "fieldname": "tax_mappings",
    "fieldtype": "Table",
    "label": "Tax Mappings",

@@ -596,13 +596,12 @@ def _sync_pricing():
 
 
 def scheduled_pricing_sync():
-    if not integration_enabled("auto_sync_masters"):
-        return
-    try:
-        if cint(get_settings().get("sync_pricing")):
-            sync_pricing()
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "SAP scheduled pricing sync failed")
+    """Kept as an entry point. Pricing is now one of the masters driven by
+    masters.scheduled_masters_sync, on its own interval, so a stale
+    scheduler row pointing here lands in the same place instead of
+    running a second sweep beside it."""
+    from stock_addon.stock_addon.sap_integration.masters import scheduled_masters_sync
+    scheduled_masters_sync()
 
 
 @frappe.whitelist()

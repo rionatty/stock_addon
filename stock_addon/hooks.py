@@ -378,15 +378,20 @@ scheduler_events = {
         # their own minute would compete for both. Each stream keeps its
         # own interval, and asking SAP "anything new?" costs one row, so
         # an idle minute is a few tiny reads.
+        #
+        # Master data rides the same minute but is a SEPARATE job, not
+        # part of that tick: the tick sleeps through its minute polling,
+        # and a master sweep taking longer than a moment would stall van
+        # transfers behind it. Each master runs on its own interval
+        # (default 5 minutes), so on most minutes this one does nothing
+        # but read a few cache keys.
+        #
+        # NOTE: one list per cron expression. A second "* * * * *" key in
+        # this dict would silently replace this one — Python keeps the
+        # last — and the jobs above it would never be registered.
         "* * * * *": [
             "stock_addon.stock_addon.sap_integration.realtime_sync.tick",
-        ],
-        # Hourly: master data. Items, customers and pricing change rarely
-        # and a full sweep is expensive — putting them on the live loop
-        # would be the overload the loop is designed to avoid.
-        "0 * * * *": [
             "stock_addon.stock_addon.sap_integration.masters.scheduled_masters_sync",
-            "stock_addon.stock_addon.sap_integration.pricing.scheduled_pricing_sync",
         ],
     },
 }

@@ -428,6 +428,13 @@ def sync_taxes():
     """Pull active SAP VAT groups into Settings → Tax Mapping. The back
     office links each code to an ERPNext Sales Taxes and Charges Template;
     pushed invoice lines then carry the SAP VatGroup."""
+    with single_flight("taxes") as lock:
+        if not lock.acquired:
+            return _("A tax sync is already running — try again in a moment.")
+        return _sync_taxes()
+
+
+def _sync_taxes():
     settings = frappe.get_doc("SAP Integration Settings")
     client = SAPClient(settings)
     rows = client.get_all("VatGroups", params={
@@ -562,6 +569,13 @@ def assign_customer_codes(limit=500):
 def sync_currencies():
     """Pull SAP currencies and make sure each exists and is enabled in
     ERPNext, so customer currencies from SAP always resolve."""
+    with single_flight("currencies") as lock:
+        if not lock.acquired:
+            return _("A currency sync is already running — try again in a moment.")
+        return _sync_currencies()
+
+
+def _sync_currencies():
     client = SAPClient()
     rows = client.get_all("Currencies", params={"$select": "Code,Name"})
     enabled = created = 0
@@ -855,19 +869,85 @@ def _sync_customers():
 
 
 # ----------------------------------------------------------- scheduler
+# Each master, the switch that enables it, the field holding its interval
+# in minutes, and what that interval is when nobody has set one.
+#
+# Separate intervals because the cost is wildly different: currencies and
+# tax codes are a handful of rows, while items sweeps every sales item
+# with its UoM groups and pricing walks every item's price on every list.
+# One shared interval would either hammer SAP with the expensive ones or
+# hold back the cheap ones for no reason.
+MASTER_JOBS = (
+    ("items",      "sync_items",      "sync_interval_items",      5),
+    ("customers",  "sync_customers",  "sync_interval_customers",  5),
+    ("taxes",      "sync_taxes",      "sync_interval_taxes",      5),
+    ("currencies", "sync_currencies", "sync_interval_currencies", 5),
+    ("pricing",    "sync_pricing",    "sync_interval_pricing",    5),
+)
+
+DEFAULT_MASTER_INTERVAL = 5
+
+
+def _master_runner(key):
+    if key == "pricing":
+        from stock_addon.stock_addon.sap_integration.pricing import sync_pricing
+        return sync_pricing
+    return {
+        "items": sync_items,
+        "customers": sync_customers,
+        "taxes": sync_taxes,
+        "currencies": sync_currencies,
+    }[key]
+
+
+def _interval_minutes(settings, fieldname, default):
+    """Blank or zero means the default.
+
+    A DocType default never reaches a Single that already exists, so an
+    unset field reads as 0 — which must mean "the default", not "run
+    every tick".
+    """
+    minutes = cint(settings.get(fieldname))
+    return minutes if minutes > 0 else default
+
+
+def _due(key, minutes):
+    """Is this master due, and claim it if so.
+
+    The cache entry IS the timer: it is written with the interval as its
+    lifetime, so while it exists the master is not due. Claimed before
+    running rather than after, so a slow sweep cannot be started again by
+    the next tick — the interval measures start to start.
+    """
+    marker = f"sap_master_due:{key}"
+    if frappe.cache().get_value(marker):
+        return False
+    frappe.cache().set_value(marker, 1, expires_in_sec=max(1, minutes) * 60)
+    return True
+
+
 def scheduled_masters_sync():
-    """Hourly job — runs only when auto-sync is switched on."""
+    """Per-minute tick. Each master runs on its own interval.
+
+    Deliberately NOT part of realtime_sync.tick: that one sleeps through
+    its minute polling, and a master sweep taking longer than a moment
+    would stall van transfers behind it. This job instead does nothing at
+    all on most ticks — a handful of cache reads — and only occupies a
+    worker on the minutes something is actually due.
+    """
     if not integration_enabled("auto_sync_masters"):
         return
-    try:
-        if cint(get_settings().sync_items):
-            sync_items()
-        if cint(get_settings().sync_customers):
-            sync_customers()
-        if cint(get_settings().get("sync_taxes")):
-            sync_taxes()
-        if cint(get_settings().get("sync_currencies")):
-            sync_currencies()
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "SAP scheduled masters sync failed")
-        log_sap("Masters", "Failed", "scheduled", message=frappe.get_traceback()[-2000:])
+
+    settings = get_settings()
+    for key, flag, field, default in MASTER_JOBS:
+        if not cint(settings.get(flag)):
+            continue
+        if not _due(key, _interval_minutes(settings, field, default)):
+            continue
+        try:
+            _master_runner(key)()
+        except Exception:
+            # One master failing must not stop the others — they are
+            # independent syncs that happen to share a tick.
+            frappe.log_error(frappe.get_traceback(), f"SAP scheduled sync: {key}")
+            log_sap("Masters", "Failed", key, message=frappe.get_traceback()[-2000:])
