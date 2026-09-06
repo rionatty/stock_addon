@@ -881,5 +881,74 @@
   "module": "Stock Addon",
   "description": "The document's own number in the Sales Pro app — what the rep sees on their phone, including the offline number it was given before it reached ERPNext. Lets a document here be traced back to the one they raised. Not unique: offline numbers are issued per device, so two reps can produce the same one.",
   "in_standard_filter": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_location_coordinates",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_location_coordinates",
+  "label": "Location (Coordinates)",
+  "fieldtype": "Data",
+  "insert_after": "custom_sales_pro_reference",
+  "description": "Where the rep was standing when this was raised, as sent by Sales Pro: latitude, longitude — e.g. 0.3476, 32.5825. The map beside it is drawn from this.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_location_map",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_location_map",
+  "label": "Location",
+  "fieldtype": "Geolocation",
+  "insert_after": "custom_location_coordinates",
+  "read_only": 1,
+  "description": "Drawn from the coordinates, so it is read-only here — correct the coordinates and it redraws on save. Empty means none were sent, or what was sent was not a usable pair.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Order-custom_location_coordinates",
+  "dt": "Sales Order",
+  "fieldname": "custom_location_coordinates",
+  "label": "Location (Coordinates)",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_docnum",
+  "description": "Where the rep was standing when this was raised, as sent by Sales Pro: latitude, longitude — e.g. 0.3476, 32.5825. The map beside it is drawn from this.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Order-custom_location_map",
+  "dt": "Sales Order",
+  "fieldname": "custom_location_map",
+  "label": "Location",
+  "fieldtype": "Geolocation",
+  "insert_after": "custom_location_coordinates",
+  "read_only": 1,
+  "description": "Drawn from the coordinates, so it is read-only here — correct the coordinates and it redraws on save. Empty means none were sent, or what was sent was not a usable pair.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Payment Entry-custom_location_coordinates",
+  "dt": "Payment Entry",
+  "fieldname": "custom_location_coordinates",
+  "label": "Location (Coordinates)",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_docnum",
+  "description": "Where the rep was standing when this was raised, as sent by Sales Pro: latitude, longitude — e.g. 0.3476, 32.5825. The map beside it is drawn from this.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Payment Entry-custom_location_map",
+  "dt": "Payment Entry",
+  "fieldname": "custom_location_map",
+  "label": "Location",
+  "fieldtype": "Geolocation",
+  "insert_after": "custom_location_coordinates",
+  "read_only": 1,
+  "description": "Drawn from the coordinates, so it is read-only here — correct the coordinates and it redraws on save. Empty means none were sent, or what was sent was not a usable pair.",
+  "module": "Stock Addon"
  }
 ]
