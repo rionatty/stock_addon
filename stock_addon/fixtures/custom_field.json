@@ -950,5 +950,67 @@
   "read_only": 1,
   "description": "Drawn from the coordinates, so it is read-only here — correct the coordinates and it redraws on save. Empty means none were sent, or what was sent was not a usable pair.",
   "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-custom_location_coordinates",
+  "dt": "Customer",
+  "fieldname": "custom_location_coordinates",
+  "label": "Location (Coordinates)",
+  "fieldtype": "Data",
+  "insert_after": "custom_sap_salesperson",
+  "module": "Stock Addon",
+  "description": "Where this customer was registered, as latitude, longitude — e.g. 0.3476, 32.5825. Every invoice, order and payment raised for them is drawn as a line back to this point, so a document booked somewhere else is visible at a glance."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-custom_location_map",
+  "dt": "Customer",
+  "fieldname": "custom_location_map",
+  "label": "Location",
+  "fieldtype": "Geolocation",
+  "read_only": 1,
+  "insert_after": "custom_location_coordinates",
+  "module": "Stock Addon",
+  "description": "Drawn from the coordinates, so it is read-only — correct those and it redraws on save."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Invoice-custom_location_distance",
+  "dt": "Sales Invoice",
+  "fieldname": "custom_location_distance",
+  "label": "Distance From Customer (km)",
+  "fieldtype": "Float",
+  "precision": "2",
+  "read_only": 1,
+  "insert_after": "custom_location_map",
+  "module": "Stock Addon",
+  "description": "Straight-line distance between where this was raised and where the customer is registered. Empty when either end has no coordinates."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Sales Order-custom_location_distance",
+  "dt": "Sales Order",
+  "fieldname": "custom_location_distance",
+  "label": "Distance From Customer (km)",
+  "fieldtype": "Float",
+  "precision": "2",
+  "read_only": 1,
+  "insert_after": "custom_location_map",
+  "module": "Stock Addon",
+  "description": "Straight-line distance between where this was raised and where the customer is registered. Empty when either end has no coordinates."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Payment Entry-custom_location_distance",
+  "dt": "Payment Entry",
+  "fieldname": "custom_location_distance",
+  "label": "Distance From Customer (km)",
+  "fieldtype": "Float",
+  "precision": "2",
+  "read_only": 1,
+  "insert_after": "custom_location_map",
+  "module": "Stock Addon",
+  "description": "Straight-line distance between where this was raised and where the customer is registered. Empty when either end has no coordinates."
  }
 ]

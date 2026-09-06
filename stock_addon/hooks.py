@@ -360,6 +360,11 @@ doc_events = {
         # SAP: only when "Send Sales Orders" is On Submit — the handler checks
         "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_sales_order_submit",
     },
+    "Customer": {
+        # coordinates where the customer was registered -> a map, and the
+        # fixed end of the line drawn on their documents
+        "validate": "stock_addon.stock_addon.doc_events.geo.set_location_map",
+    },
     "Sales Person": {
         # On creation, auto-provision a Cost Center + Warehouse named after
         # the sales person's own code.
