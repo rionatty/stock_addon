@@ -161,11 +161,18 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
     # Narrow in SQL on the two fields that are always set, then decide on
     # the full key in Python — SQL cannot express "NULL or empty" without
     # a clause per field, and getting that subtly wrong is what broke it.
-    # Every field in the key, including the ones we leave blank — a row
-    # that HAS a uom is a different row by ERPNext's rule, and writing a
-    # second one beside it is correct rather than a duplicate.
+    # uom is NOT ours to leave blank. Item Price declares
+    # fetch_from = item_code.stock_uom, and frappe applies that in
+    # _validate_links() — which insert() calls BEFORE the validate that
+    # runs check_duplicates. So the row ERPNext compares always carries
+    # the item's stock UOM, and looking one up as blank never matches it:
+    # we insert, and ERPNext throws on the duplicate we just failed to
+    # find. Ask for the same value it will fetch.
+    stock_uom = frappe.get_cached_value("Item", item_code, "stock_uom")
+
+    # Every field in ERPNext's key, including the ones we leave empty.
     wanted = {
-        "uom": None,
+        "uom": stock_uom,
         "valid_from": valid_from,
         "valid_upto": valid_upto,
         "customer": customer,
@@ -207,6 +214,9 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
         "valid_upto": valid_upto,
         "selling": 1,
         "currency": currency,
+        # Set it rather than letting the fetch decide silently, so the row
+        # written is the row that was looked for.
+        "uom": stock_uom,
     }
     if supports_min_qty:
         payload["min_qty"] = flt(min_qty)
