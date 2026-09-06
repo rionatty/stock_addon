@@ -313,9 +313,17 @@ doc_events = {
         "on_submit": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
     },
     "Sales Invoice": {
-        "validate": "stock_addon.stock_addon.doc_events.sales_invoice.validate",
+        "validate": [
+            "stock_addon.stock_addon.doc_events.sales_invoice.validate",
+            # coordinates from Sales Pro -> a map on the document
+            "stock_addon.stock_addon.doc_events.geo.set_location_map",
+        ],
+    },
+    "Payment Entry": {
+        "validate": "stock_addon.stock_addon.doc_events.geo.set_location_map",
     },
     "Sales Order": {
+        "validate": "stock_addon.stock_addon.doc_events.geo.set_location_map",
         # The app posts orders as drafts — submit them on arrival if
         # Stock Addon Settings asks for it.
         "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
