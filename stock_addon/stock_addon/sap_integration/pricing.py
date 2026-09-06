@@ -145,10 +145,18 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
     """
     item_code = resolve_item(item_code)
     if not item_code or not price_list:
-        return 0
+        return None
+    # No price on that list is not a price of zero. SAP returns an entry
+    # for every list an item touches, so writing the empty ones would put
+    # items on lists they were never priced on — and a 0.00 Item Price is
+    # worse than none, because it wins over the list the item really
+    # belongs to. Enforced here rather than at each caller: this is the
+    # only door into the table.
+    if flt(rate) <= 0:
+        return None
     supports_min_qty = _item_price_has("min_qty")
     if flt(min_qty) and not supports_min_qty:
-        return 0
+        return None
 
     # Narrow in SQL on the two fields that are always set, then decide on
     # the full key in Python — SQL cannot express "NULL or empty" without
@@ -180,11 +188,15 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
             break
 
     if existing:
-        if flt(existing.price_list_rate) != flt(rate):
-            frappe.db.set_value("Item Price", existing.name, "price_list_rate", flt(rate),
-                                update_modified=False)
-            return 1
-        return 0
+        # Compare at the field's own precision. Plain float equality calls
+        # 1000.0 and 1000.0000001 different and rewrites the row on every
+        # run, which reports price changes that never happened.
+        precision = frappe.get_precision("Item Price", "price_list_rate") or 2
+        if flt(existing.price_list_rate, precision) == flt(rate, precision):
+            return None                       # already right — leave it alone
+        frappe.db.set_value("Item Price", existing.name, "price_list_rate", flt(rate),
+                            update_modified=False)
+        return "updated"
     payload = {
         "doctype": "Item Price",
         "item_code": item_code,
@@ -201,7 +213,7 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
     doc = frappe.get_doc(payload)
     doc.flags.ignore_permissions = True
     doc.insert(ignore_permissions=True)
-    return 1
+    return "added"
 
 
 def _upsert_pricing_rule(name, values, item_codes=None, item_groups=None):
@@ -280,21 +292,33 @@ def sync_item_prices(client):
         "$select": "ItemCode,ItemPrices,Valid,Frozen",
         "$filter": "SalesItem eq 'tYES'",
     })
-    written = 0
+    added = updated = unchanged = unpriced = 0
     for row in rows:
         if row.get("Frozen") == "tYES" or row.get("Valid") == "tNO":
             continue
         item_code = row.get("ItemCode")
         for entry in (row.get("ItemPrices") or []):
             price_list = price_lists.get(entry.get("PriceList"))
+            if not price_list:
+                continue                      # a SAP list ERPNext does not have
             price = flt(entry.get("Price"))
-            if not price_list or price <= 0:
+            if price <= 0:
+                # SAP lists every price list against every item; the ones
+                # it holds no price for are skipped, not written as zero.
+                unpriced += 1
                 continue
-            written += _upsert_item_price(
+            outcome = _upsert_item_price(
                 item_code, price_list, price, currency=entry.get("Currency")
             )
+            if outcome == "added":
+                added += 1
+            elif outcome == "updated":
+                updated += 1
+            else:
+                unchanged += 1
     frappe.db.commit()
-    return f"item prices: {written} written"
+    return (f"item prices: {added} added, {updated} price changes, "
+            f"{unchanged} already correct, {unpriced} skipped (no price on that list)")
 
 
 # --------------------------------------------------- 1. special prices
@@ -343,11 +367,12 @@ def sync_special_prices(client):
         for price, min_qty, date_from, date_to in variants:
             if price <= 0:
                 continue
-            prices += _upsert_item_price(
+            if _upsert_item_price(
                 item_code, price_list, price, customer=customer,
                 min_qty=min_qty, valid_from=date_from, valid_upto=date_to,
                 currency=row.get("Currency"),
-            )
+            ):
+                prices += 1
             rules += _upsert_pricing_rule(
                 _docname("SP", card_code, item_code, int(min_qty), date_from or ""),
                 {
