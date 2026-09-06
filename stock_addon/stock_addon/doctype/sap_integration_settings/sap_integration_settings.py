@@ -130,6 +130,13 @@ def check_integration_fields_now():
 
 
 @frappe.whitelist()
+def sync_health_now():
+    _require_manager()
+    from stock_addon.stock_addon.sap_integration.realtime_sync import sync_health
+    return sync_health()
+
+
+@frappe.whitelist()
 def pull_documents_now():
     _require_manager()
     from stock_addon.stock_addon.sap_integration.document_pull import pull_documents

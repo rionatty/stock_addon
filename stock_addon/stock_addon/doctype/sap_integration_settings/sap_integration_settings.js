@@ -48,6 +48,9 @@ frappe.ui.form.on("SAP Integration Settings", {
 		frm.add_custom_button(__("Test Connection"), () => call("test_connection", "Testing SAP connection"));
 		frm.add_custom_button(__("Discover SAP Entities"), () => call("discover_entities_now", "Reading SAP $metadata"));
 		frm.add_custom_button(__("Check SAP User Fields"), () => report("check_integration_fields_now", "Checking SAP user fields"));
+		// First stop when nothing is syncing: says which of the four
+		// possible causes is actually blocking, without a shell.
+		frm.add_custom_button(__("Why Is Sync Not Running?"), () => report("sync_health_now", "Checking the live sync"));
 
 		if (frm.doc.enabled) {
 			frm.add_custom_button(__("Sync Items"), () => call("sync_items_now", "Syncing items from SAP"), __("Masters"));

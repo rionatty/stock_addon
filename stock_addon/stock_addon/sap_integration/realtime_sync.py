@@ -125,3 +125,139 @@ def _poll_documents():
         document_pull.poll_invoices()
     if integration_enabled("pull_sap_payments"):
         document_pull.poll_payments()
+
+
+# ----------------------------------------------------------- diagnosis
+#
+# "Nothing is syncing" has four possible causes and only one of them is
+# this app: Frappe's scheduler can be off site-wide, the job can be
+# missing or paused, the switches can be off, or SAP can be refusing.
+# Chasing that from a console is slow and needs a shell, so it is
+# answered here — in order, stopping at the first thing that is actually
+# blocking, because everything after it is moot.
+
+TICK_METHOD = "stock_addon.stock_addon.sap_integration.realtime_sync.tick"
+
+
+@frappe.whitelist()
+def sync_health():
+    """Why the live sync is or is not running. Read top to bottom."""
+    frappe.only_for(("System Manager", "Administrator"))
+    from frappe.utils import now_datetime, time_diff_in_seconds
+
+    lines = []
+    blockers = []
+
+    # 1. the scheduler itself
+    lines.append(_("SCHEDULER"))
+    if frappe.conf.get("maintenance_mode"):
+        blockers.append(_("The site is in maintenance mode — no scheduled job runs."))
+        lines.append(_("  Maintenance mode: ON — nothing scheduled runs"))
+    if frappe.conf.get("pause_scheduler"):
+        blockers.append(_("frappe.conf.pause_scheduler is set — no scheduled job runs."))
+        lines.append(_("  pause_scheduler: SET in site config"))
+    if frappe.conf.get("disable_scheduler"):
+        blockers.append(_("frappe.conf.disable_scheduler is set — no scheduled job runs."))
+        lines.append(_("  disable_scheduler: SET in site config"))
+    if not cint(frappe.get_system_settings("enable_scheduler")):
+        blockers.append(_("The scheduler is switched off in System Settings. Tick "
+                          "'Enable Scheduler' there, or run: bench --site {0} enable-scheduler"
+                          ).format(frappe.local.site))
+        lines.append(_("  System Settings > Enable Scheduler: OFF"))
+    if not blockers:
+        lines.append(_("  Running."))
+
+    # 2. this app's jobs
+    lines.append("")
+    lines.append(_("JOBS"))
+    jobs = frappe.get_all(
+        "Scheduled Job Type",
+        filters={"method": ("like", "%stock_addon%")},
+        fields=["name", "method", "stopped", "last_execution", "cron_format"],
+        order_by="method",
+    )
+    if not jobs:
+        blockers.append(_("No scheduled jobs are registered for this app — run bench migrate."))
+        lines.append(_("  None registered. Run 'bench migrate'."))
+    for job in jobs:
+        short = job.method.rsplit(".", 2)[-2] + "." + job.method.rsplit(".", 1)[-1]
+        age = ""
+        if job.last_execution:
+            seconds = time_diff_in_seconds(now_datetime(), job.last_execution)
+            age = _(" ({0} ago)").format(_humanise(seconds))
+        lines.append("  {0}  [{1}]  {2}{3}{4}".format(
+            short,
+            job.cron_format or _("event"),
+            _("STOPPED — ") if job.stopped else "",
+            job.last_execution or _("never run"),
+            age,
+        ))
+        if job.method == TICK_METHOD:
+            if job.stopped:
+                blockers.append(_("The live sync job is stopped. Open Scheduled Job Type "
+                                  "'{0}' and untick Stopped.").format(job.name))
+            elif not job.last_execution:
+                blockers.append(_("The live sync job has never run — the scheduler is not "
+                                  "reaching it. Check that the workers are up: bench doctor"))
+            elif time_diff_in_seconds(now_datetime(), job.last_execution) > 300:
+                blockers.append(_("The live sync job last ran {0} ago; it should run every "
+                                  "minute. The scheduler or its workers have stopped — "
+                                  "bench restart, then bench doctor.").format(
+                                      _humanise(time_diff_in_seconds(now_datetime(), job.last_execution))))
+    if not any(j.method == TICK_METHOD for j in jobs):
+        blockers.append(_("The live sync job is not registered. It is created from hooks.py "
+                          "by bench migrate — pull the latest code and migrate."))
+
+    # 3. the switches
+    settings = get_settings()
+    lines.append("")
+    lines.append(_("SWITCHES"))
+    for label, field in (
+        (_("SAP integration"), "enabled"),
+        (_("Pull van transfers"), "pull_van_transfers"),
+        (_("Pull invoices raised in SAP"), "pull_sap_invoices"),
+        (_("Pull payments taken in SAP"), "pull_sap_payments"),
+    ):
+        lines.append("  {0}: {1}".format(label, _("ON") if cint(settings.get(field)) else _("off")))
+    if not cint(settings.get("enabled")):
+        blockers.append(_("'Enable SAP Integration' is off — nothing is pushed or pulled."))
+    elif not any(cint(settings.get(f)) for f in
+                 ("pull_van_transfers", "pull_sap_invoices", "pull_sap_payments")):
+        blockers.append(_("Every pull switch is off, so the job runs and finds nothing to do."))
+
+    lines.append("")
+    lines.append(_("POSITION IN SAP"))
+    lines.append(_("  Transfers from DocEntry: {0}").format(cint(settings.get("last_transfer_docentry"))))
+    lines.append(_("  Invoices live from DocEntry: {0}").format(cint(settings.get("last_invoice_docentry")) or _("not started")))
+    lines.append(_("  Payments live from DocEntry: {0}").format(cint(settings.get("last_payment_docentry")) or _("not started")))
+
+    # 4. what SAP has actually been saying
+    lines.append("")
+    lines.append(_("LAST 5 PULL LOG ENTRIES"))
+    logs = frappe.get_all(
+        "SAP Integration Log",
+        filters={"direction": "Pull"},
+        fields=["creation", "status", "endpoint", "message"],
+        order_by="creation desc",
+        limit=5,
+    )
+    if not logs:
+        lines.append(_("  Nothing logged yet."))
+    for entry in logs:
+        lines.append("  {0}  {1:<7} {2}: {3}".format(
+            entry.creation, entry.status, entry.endpoint,
+            (entry.message or "").splitlines()[0][:150]))
+
+    verdict = ([_("BLOCKED:")] + [f"  - {b}" for b in blockers]) if blockers else \
+        [_("Nothing is blocking the live sync. If documents are still not arriving, the "
+           "last log entries above say what SAP answered.")]
+    return "\n".join(verdict + [""] + lines)
+
+
+def _humanise(seconds):
+    seconds = int(seconds or 0)
+    if seconds < 120:
+        return _("{0}s").format(seconds)
+    if seconds < 7200:
+        return _("{0} min").format(seconds // 60)
+    return _("{0} h").format(seconds // 3600)
