@@ -41,6 +41,7 @@ from stock_addon.stock_addon.sap_integration.connection import (
     integration_enabled,
     log_sap,
 )
+from stock_addon.stock_addon.sap_integration.masters import resolve_item
 
 PRIORITY_SPECIAL_PRICE = "20"
 PRIORITY_DISCOUNT_GROUP = "15"
@@ -106,6 +107,33 @@ def _item_price_has(field):
     return bool(frappe.get_meta("Item Price").get_field(field))
 
 
+# The fields ERPNext itself uses to decide two Item Prices are the same
+# document (item_price.py check_duplicates). Ours has to agree with it,
+# or we look for a row it will later object to.
+ITEM_PRICE_KEY = ("uom", "valid_from", "valid_upto", "customer", "supplier",
+                  "batch_no", "packing_unit")
+
+
+def _same_key(row, wanted):
+    """Compare on ERPNext's terms: an unset field matches NULL *or* empty.
+
+    This is the whole reason the sync used to fail with "Item Price
+    appears multiple times". Looking a row up with customer="" never
+    matched the row already stored with customer NULL, so a second one
+    was inserted — and ERPNext, which treats the two as equal, rejected
+    it. The insert failed on the duplicate we had just failed to find.
+    """
+    for field in ITEM_PRICE_KEY:
+        ours, theirs = wanted.get(field), row.get(field)
+        if field == "packing_unit":
+            if flt(ours) != flt(theirs):
+                return False
+            continue
+        if (ours or "") != (theirs or ""):
+            return False
+    return True
+
+
 def _upsert_item_price(item_code, price_list, rate, customer=None,
                        min_qty=0, valid_from=None, valid_upto=None, currency=None):
     """Item Price keyed on its natural identity, so a re-sync updates the
@@ -115,20 +143,42 @@ def _upsert_item_price(item_code, price_list, rate, customer=None,
     carries min_qty; otherwise the tier lives solely in its Pricing Rule,
     which always supports quantity ranges.
     """
-    if not frappe.db.exists("Item", item_code) or not price_list:
+    item_code = resolve_item(item_code)
+    if not item_code or not price_list:
         return 0
     supports_min_qty = _item_price_has("min_qty")
     if flt(min_qty) and not supports_min_qty:
         return 0
-    filters = {
-        "item_code": item_code,
-        "price_list": price_list,
-        "customer": customer or "",
+
+    # Narrow in SQL on the two fields that are always set, then decide on
+    # the full key in Python — SQL cannot express "NULL or empty" without
+    # a clause per field, and getting that subtly wrong is what broke it.
+    # Every field in the key, including the ones we leave blank — a row
+    # that HAS a uom is a different row by ERPNext's rule, and writing a
+    # second one beside it is correct rather than a duplicate.
+    wanted = {
+        "uom": None,
         "valid_from": valid_from,
+        "valid_upto": valid_upto,
+        "customer": customer,
+        "supplier": None,
+        "batch_no": None,
+        "packing_unit": 0,
     }
-    if supports_min_qty:
-        filters["min_qty"] = flt(min_qty)
-    existing = frappe.db.get_value("Item Price", filters, ["name", "price_list_rate"], as_dict=True)
+    candidates = frappe.get_all(
+        "Item Price",
+        filters={"item_code": item_code, "price_list": price_list},
+        fields=["name", "price_list_rate"] + list(ITEM_PRICE_KEY)
+        + (["min_qty"] if supports_min_qty else []),
+    )
+    existing = None
+    for row in candidates:
+        if supports_min_qty and flt(row.get("min_qty")) != flt(min_qty):
+            continue
+        if _same_key(row, wanted):
+            existing = row
+            break
+
     if existing:
         if flt(existing.price_list_rate) != flt(rate):
             frappe.db.set_value("Item Price", existing.name, "price_list_rate", flt(rate),
@@ -173,8 +223,9 @@ def _upsert_pricing_rule(name, values, item_codes=None, item_groups=None):
 
     doc.set("items", [])
     for code in (item_codes or []):
-        if frappe.db.exists("Item", code):
-            doc.append("items", {"item_code": code})
+        item = resolve_item(code)
+        if item:
+            doc.append("items", {"item_code": item})
     doc.set("item_groups", [])
     for group in (item_groups or []):
         if frappe.db.exists("Item Group", group):
@@ -266,7 +317,7 @@ def sync_special_prices(client):
         if not customer:
             no_customer += 1
             continue
-        if not item_code or not frappe.db.exists("Item", item_code):
+        if not resolve_item(item_code):
             no_item += 1
             continue
 
@@ -374,7 +425,7 @@ def sync_period_volume(client):
     made = 0
     for row in rows:
         item_code = row.get("ItemCode")
-        if not item_code or not frappe.db.exists("Item", item_code):
+        if not resolve_item(item_code):
             continue
         price_list = price_lists.get(row.get("PriceList"))
 

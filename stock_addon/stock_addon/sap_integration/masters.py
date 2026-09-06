@@ -97,6 +97,24 @@ def _uom_maps(client):
     return entry_to_code, group_lines, group_base
 
 
+def resolve_item(sap_code):
+    """The ERPNext item for a SAP ItemCode, or None.
+
+    Items synced from here are named after their SAP code, so the docname
+    usually IS the code — but an item that existed before the
+    integration, or a site that names items by series, carries the code
+    in item_code under a different docname. Checking only the docname
+    reports a present item as missing, which reads as "sync the items"
+    when syncing will never help.
+    """
+    code = (sap_code or "").strip()
+    if not code:
+        return None
+    if frappe.db.exists("Item", code):
+        return code
+    return frappe.db.get_value("Item", {"item_code": code}, "name")
+
+
 def _normalise(text):
     """Fold case and whitespace so 'Bakers  Flour ' == 'bakers flour'."""
     return " ".join((text or "").split()).casefold()

@@ -63,20 +63,10 @@ def _scan_limit(settings):
 
 
 def _item_for(sap_code):
-    """The ERPNext item for a SAP ItemCode, or None.
-
-    Items synced from SAP are named after their SAP code, so the docname
-    usually IS the code — but an item created here first, or on a site
-    that names items by series, carries the code in item_code with a
-    different docname. Checking only the docname reports a perfectly
-    present item as missing.
-    """
-    code = (sap_code or "").strip()
-    if not code:
-        return None
-    if frappe.db.exists("Item", code):
-        return code
-    return frappe.db.get_value("Item", {"item_code": code}, "name")
+    """One definition of "which ERPNext item is this", shared with the
+    pricing sync — see masters.resolve_item."""
+    from stock_addon.stock_addon.sap_integration.masters import resolve_item
+    return resolve_item(sap_code)
 
 
 def _item_group_filter_note():
