@@ -207,6 +207,17 @@ def _push(doc, endpoint, payload, direction_label):
         return False
 
 
+# What the ERPNext document number is called on the SAP side. It appears
+# in Remarks, Comments and Memo — the fields a person reads in SAP — and
+# names the system the number belongs to, which to anyone in SAP is Sales
+# Pro rather than the framework underneath it.
+#
+# NumAtCard is deliberately NOT prefixed: the pull matches on it to
+# recognise a document that originated here, so it must stay the bare
+# document name.
+ORIGIN_LABEL = "SalesPro integration number"
+
+
 # SAP B1 carries five cost-centre dimensions on a document line, named
 # CostingCode..CostingCode5. Each is held against the sales person, since
 # in route selling the rep IS the dimension — their route, their vehicle,
@@ -417,7 +428,7 @@ def push_sales_invoice_doc(doc):
         "DocDate": str(doc.posting_date),
         "DocDueDate": str(doc.get("due_date") or doc.posting_date),
         "NumAtCard": doc.name,
-        "Comments": f"ERPNext {doc.name}"[:254],
+        "Comments": f"{ORIGIN_LABEL} {doc.name}"[:254],
         "DocumentLines": lines,
     }
     _set_sales_employee(payload, doc)
@@ -465,7 +476,7 @@ def push_sales_order_doc(doc):
         # DocDueDate on an order is the delivery promise, not a payment date
         "DocDueDate": str(doc.get("delivery_date") or doc.transaction_date),
         "NumAtCard": doc.name,
-        "Comments": f"ERPNext {doc.name}"[:254],
+        "Comments": f"{ORIGIN_LABEL} {doc.name}"[:254],
         "DocumentLines": lines,
     }
     _set_sales_employee(payload, doc)
@@ -519,7 +530,7 @@ def push_material_request_doc(doc):
     payload = {
         "DocDate": str(doc.transaction_date),
         "DueDate": str(doc.schedule_date or doc.transaction_date),
-        "Comments": f"ERPNext {doc.name} — {doc.get('custom_narration') or 'van stock request'}"[:250],
+        "Comments": f"{ORIGIN_LABEL} {doc.name} — {doc.get('custom_narration') or 'van stock request'}"[:250],
         "StockTransferLines": lines,
     }
 
@@ -639,7 +650,7 @@ def push_payment_entry_doc(doc):
     payload = {
         "CardCode": _cardcode(doc.party),
         "DocDate": _sap_date(doc.posting_date),
-        "Remarks": f"ERPNext {doc.name}"[:250],
+        "Remarks": f"{ORIGIN_LABEL} {doc.name}"[:250],
     }
     if is_bank:
         payload["TransferAccount"] = account_code
@@ -756,7 +767,7 @@ def push_field_expense_doc(doc):
 
     payload = {
         "ReferenceDate": str(doc.expense_date),
-        "Memo": f"ERPNext FE {doc.name}"[:50],
+        "Memo": f"SalesPro {doc.name}"[:50],
         "JournalEntryLines": lines,
     }
     return _push(doc, "JournalEntries", payload, _("Expense Journal"))
