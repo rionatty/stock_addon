@@ -17,6 +17,7 @@ from frappe.model.document import Document
 AUTO_SUBMIT_FIELDS = (
     ("Sales Order", "auto_submit_sales_orders"),
     ("Material Request", "auto_submit_material_requests"),
+    ("Field Expense", "auto_submit_field_expenses"),
 )
 
 

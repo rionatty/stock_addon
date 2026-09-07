@@ -43,6 +43,7 @@
   "section_auto_submit",
   "auto_submit_sales_orders",
   "auto_submit_material_requests",
+  "auto_submit_field_expenses",
   "column_break_auto_submit",
   "auto_submit_immediately",
   "auto_submit_van_returns",
@@ -318,6 +319,14 @@
    "fieldname": "auto_submit_material_requests",
    "fieldtype": "Select",
    "label": "Auto-Submit Material Requests",
+   "options": "Off\nFrom the App Only\nApp and Desk"
+  },
+  {
+   "default": "Off",
+   "description": "Field Expenses are not submitted — they are POSTED, which raises the Journal Entry that spends the money and sends it to SAP as a Journal Voucher. Turn this on and that happens the moment the rep records the expense, with nobody pressing Post. Off leaves them as drafts for the back office to check first.",
+   "fieldname": "auto_submit_field_expenses",
+   "fieldtype": "Select",
+   "label": "Auto-Post Field Expenses",
    "options": "Off\nFrom the App Only\nApp and Desk"
   },
   {

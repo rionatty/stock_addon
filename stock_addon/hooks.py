@@ -373,6 +373,11 @@ doc_events = {
         # the sales person's own code.
         "after_insert": "stock_addon.stock_addon.doc_events.sales_person.after_insert",
     },
+    "Field Expense": {
+        # Not submittable: "auto-submit" here means raising its Journal
+        # Entry, which is what posts it and sends it to SAP.
+        "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
+    },
     "Quality Inspection": {
         # Copy the QC disposition (Batch Status) onto the linked Batch.
         "on_submit": "stock_addon.stock_addon.doc_events.quality_inspection.sync_batch_status",

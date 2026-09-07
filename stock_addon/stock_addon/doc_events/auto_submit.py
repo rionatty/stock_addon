@@ -1,12 +1,21 @@
 # Copyright (c) 2026, mohtashim and contributors
 # For license information, please see license.txt
 
-"""Submit Sales Orders and Material Requests as soon as they are created.
+"""Finish documents the app leaves half-done, as soon as they arrive.
 
-after_insert hook (wired in hooks.py). The Sales Pro app posts each of
-these as a single draft — one request carrying the whole document — and
-never comes back to submit it, so without this they queue up in the desk
-waiting for someone to submit them by hand.
+after_insert hook (wired in hooks.py) for Sales Order, Material Request
+and Field Expense. The Sales Pro app posts each as a single draft — one
+request carrying the whole document — and never comes back to finish it,
+so without this they queue up in the desk waiting for someone to press a
+button by hand.
+
+"Finish" is not the same act for all three. Sales Orders and Material
+Requests are submitted. A Field Expense is not a submittable doctype at
+all: it is POSTED, which raises the Journal Entry that actually spends
+the money, marks it Posted and sends it to SAP as a Journal Voucher.
+_post() holds that difference in one place, and the setting for it is
+labelled Auto-POST rather than auto-submit so nobody switches it on
+expecting a docstatus.
 
 Driven by SAP Integration Settings -> Auto Submit, off by default and set
 per doctype. Submitting is not reversible: a submitted document can only
@@ -49,6 +58,14 @@ SAVEPOINT = "stock_addon_auto_submit"
 MODE_FIELD = {
     "Sales Order": "auto_submit_sales_orders",
     "Material Request": "auto_submit_material_requests",
+    "Field Expense": "auto_submit_field_expenses",
+}
+
+# The child table that makes a document more than an empty header.
+LINES_FIELD = {
+    "Sales Order": "items",
+    "Material Request": "items",
+    "Field Expense": "expense_items",
 }
 
 OFF = "Off"
@@ -77,15 +94,38 @@ def after_insert(doc, method=None):
     )
 
 
+def _already_done(doc):
+    """Has this document already reached the state we would put it in?
+
+    Field Expense is not a submittable doctype — it has no docstatus at
+    all. What "submitted" means for it is having its journal entry, which
+    is what sets it to Posted and sends it to SAP.
+    """
+    if doc.doctype == "Field Expense":
+        return bool(doc.get("journal_entry"))
+    return cint(doc.docstatus) != 0
+
+
+def _post(doctype, docname):
+    """Do whatever submitting means for this doctype."""
+    if doctype == "Field Expense":
+        from stock_addon.stock_addon.doctype.field_expense.field_expense import (
+            make_journal_entry,
+        )
+        make_journal_entry(docname)
+        return
+    frappe.get_doc(doctype, docname).submit()
+
+
 def submit_document(doctype, docname):
     """Background half: submit a document in its own transaction, after the
     request that created it has committed."""
     doc = frappe.get_doc(doctype, docname)
-    if cint(doc.docstatus) != 0:
+    if _already_done(doc):
         # A retried job, or a person got there first.
         return
     try:
-        doc.submit()
+        _post(doctype, docname)
     except Exception:
         frappe.db.rollback()
         _record_failure(doctype, docname)
@@ -97,11 +137,11 @@ def _wanted(doc):
     """Every reason to leave a document alone, cheapest check first."""
     if doc.doctype not in MODE_FIELD:
         return False
-    if cint(doc.docstatus) != 0:
+    if _already_done(doc):
         return False                        # the creator submitted it themselves
     if doc.flags.get("skip_auto_submit"):
         return False                        # our own code opting out
-    if not doc.get("items"):
+    if not doc.get(LINES_FIELD[doc.doctype]):
         return False                        # a header with no lines is not a document yet
 
     settings = _settings()
@@ -192,7 +232,7 @@ def _submit_in_request(doc):
     try:
         # A fresh copy: the doc handed to after_insert is mid-insert, and
         # submitting it re-enters insert().
-        frappe.get_doc(doc.doctype, doc.name).submit()
+        _post(doc.doctype, doc.name)
     except Exception:
         frappe.db.rollback(save_point=SAVEPOINT)
         # Rolling back undoes SQL, not the message queue — without this
@@ -206,7 +246,8 @@ def _submit_in_request(doc):
         # The response is built from this object. Leaving it saying "draft"
         # with a pre-submit timestamp makes the desk show the wrong state
         # and fail its next save on a timestamp mismatch.
-        doc.docstatus = 1
+        if doc.meta.is_submittable:
+            doc.docstatus = 1
         doc.modified = frappe.db.get_value(doc.doctype, doc.name, "modified")
 
 
