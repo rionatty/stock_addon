@@ -297,10 +297,10 @@
   },
   {
    "depends_on": "push_expense_journals",
-   "description": "SAP entity for expense journals. Leave EMPTY to detect it automatically. Set it only when this Service Layer serves the voucher path under another name — 'Discover SAP Entities' lists what it really has. If no voucher path exists at all, expenses post as Journal Entries instead, straight to the ledger, and the log says so.",
+   "description": "Leave EMPTY. Journal vouchers are created through the SAP service action JournalVouchersService_Add, not an entity collection — set this only if your install exposes that action under a different name.",
    "fieldname": "expense_voucher_entity",
    "fieldtype": "Data",
-   "label": "Expense Voucher Entity (SAP)"
+   "label": "Expense Voucher Service (SAP)"
   },
   {
    "default": "1",

@@ -10,8 +10,9 @@ Wired on on_submit (hooks.py), all guarded by SAP Integration Settings:
   Sales Invoice            → /Invoices        (is_return → /CreditNotes)
   Material Request (MT)    → /InventoryTransferRequests
   Payment Entry (Receive)  → /IncomingPayments
-  Field Expense (Posted)   → /JournalVouchers (a DRAFT journal entry: SAP
-                             posts it to the ledger, we do not)
+  Field Expense (Posted)   → JournalVouchersService_Add (a DRAFT journal
+                             entry — a SERVICE action, not an entity set;
+                             SAP posts it to the ledger when approved)
 
 Design rules:
   - a push failure NEVER blocks the ERPNext submission — every on_* entry
@@ -172,6 +173,29 @@ def _batch_numbers_for_row(item):
     return []
 
 
+def _document_keys(result):
+    """(DocEntry, DocNum) from whatever SAP sent back.
+
+    An entity POST answers with the document itself, so the keys are at
+    the top. A SERVICE action answers with the object it created wrapped
+    in its own name — JournalVouchersService_Add returns the voucher
+    around its journal entry — so the keys are a level or two down. Both
+    shapes are read here rather than each caller learning the difference,
+    and a response carrying neither simply leaves the document stamped
+    Synced without a number, which is true.
+    """
+    if not isinstance(result, dict):
+        return None, None
+    if result.get("DocEntry") is not None or result.get("DocNum") is not None:
+        return result.get("DocEntry"), result.get("DocNum")
+    for value in result.values():
+        if isinstance(value, dict):
+            entry, num = _document_keys(value)
+            if entry is not None or num is not None:
+                return entry, num
+    return None, None
+
+
 def _push(doc, endpoint, payload, direction_label):
     """POST one document; stamp + log both outcomes. Returns True on success."""
     # Claimed before the POST, not after: SAP creates its copy while we are
@@ -180,7 +204,7 @@ def _push(doc, endpoint, payload, direction_label):
     note_sending(doc.name)
     try:
         result = SAPClient().post(endpoint, payload)
-        docentry, docnum = result.get("DocEntry"), result.get("DocNum")
+        docentry, docnum = _document_keys(result)
         note_pushed(endpoint, docentry, doc.name)
         _stamp(doc, "Synced", docentry, docnum)
         log_sap("Push", "Success", endpoint, doc.doctype, doc.name, docentry,
@@ -810,72 +834,46 @@ def push_field_expense_doc(doc):
     # The shape follows the object: JournalVouchers holds JournalEntries,
     # which holds the lines (JournalVouchers.JournalEntries.Lines in the
     # DI API), so the entry is nested rather than sent flat.
-    # A voucher, or nothing. Posting the entry straight to the ledger
-    # would put an unreviewed field expense into the accounts, which is
-    # the outcome the voucher exists to prevent — so a missing voucher
-    # path fails the push rather than quietly becoming a posting. The
-    # expense is unaffected either way: it is already posted in ERPNext,
-    # the push is guarded, and 'Retry Failed Pushes' sends it the moment
-    # the path is known.
-    endpoint = _voucher_entity()
-    if not endpoint:
-        raise SAPError(
-            "This SAP Service Layer serves no Journal Voucher path — /JournalVouchers "
-            "answered 'Unrecognized resource path' and $metadata lists nothing "
-            "voucher-shaped. The expense has NOT been sent, because posting it as a "
-            "Journal Entry would put it straight into the general ledger with nobody "
-            "having approved it. Run 'Discover SAP Entities' and, if the voucher path "
-            "is listed under another name, set it as 'Expense Voucher Entity' in SAP "
-            "Integration Settings — then use 'Retry Failed Pushes'."
-        )
-
-    # A voucher wraps its entry: JournalVouchers.JournalEntries.Lines in
-    # the DI API, so the entry is nested rather than flat.
+    # The service takes the voucher wrapping ONE journal entry — singular
+    # JournalVoucher.JournalEntry, not a collection. A voucher is a draft:
+    # SAP posts it to the ledger when somebody approves it, which is the
+    # whole reason expenses claimed on a phone go this way rather than
+    # straight to /JournalEntries.
+    posting_date = str(doc.expense_date)
     payload = {
-        "JournalEntries": [{
-            "ReferenceDate": str(doc.expense_date),
-            "Memo": f"SalesPro {doc.name}"[:50],
-            "JournalEntryLines": lines,
-        }],
+        "JournalVoucher": {
+            "JournalEntry": {
+                "ReferenceDate": posting_date,
+                "DueDate": posting_date,
+                "Memo": f"SalesPro {doc.name}"[:50],
+                "JournalEntryLines": lines,
+            },
+        },
     }
-    return _push(doc, endpoint, payload, _("Expense Journal Voucher"))
+    return _push(doc, _voucher_entity(), payload, _("Expense Journal Voucher"))
+
+
+# Journal vouchers are not an entity collection — SAP exposes them as a
+# SERVICE action. That is why probing /JournalVouchers only ever returned
+# "Unrecognized resource path": there is no such resource to GET. The
+# action takes the voucher wrapped around a single journal entry.
+VOUCHER_SERVICE = "JournalVouchersService_Add"
 
 
 def _voucher_entity():
-    """What this SAP install calls the journal voucher path, or None.
+    """The path that creates a journal voucher.
 
-    "Unrecognized resource path" for /JournalVouchers is not proof the
-    company has no vouchers — it is proof this Service Layer does not
-    serve that name. Probe the paths that really respond, then fall back
-    to reading $metadata for anything voucher-shaped, before concluding
-    there is none.
-
-    A configured name wins outright: once 'Discover SAP Entities' has
-    named it, nobody should have to wait for a code change.
+    A setting still wins, so an install that names its service
+    differently can be pointed at it without a code change.
     """
-    configured = (get_settings().get("expense_voucher_entity") or "").strip()
-    if configured:
-        return configured
-
-    client = SAPClient()
-    found = client.probe_entity((
-        "JournalVouchers", "JournalVoucher",
-        # some installs expose the draft under a name of its own
-        "JournalVoucherEntries", "DraftJournalEntries",
-    ))
-    if found:
-        return found
-    try:
-        return client.find_entity("journal", "voucher") or client.find_entity("voucher")
-    except Exception:
-        return None
+    return (get_settings().get("expense_voucher_entity") or "").strip() or VOUCHER_SERVICE
 
 
 def on_field_expense_posted(doc):
     """Called from field_expense.make_journal_entry after posting."""
     if not integration_enabled("push_expense_journals"):
         return
-    _guarded(push_field_expense_doc, doc, "JournalVouchers")
+    _guarded(push_field_expense_doc, doc, VOUCHER_SERVICE)
 
 
 # --------------------------------------------------------------- retry
