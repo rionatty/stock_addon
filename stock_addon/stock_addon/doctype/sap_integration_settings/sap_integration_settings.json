@@ -39,6 +39,7 @@
   "column_break_push",
   "push_incoming_payments",
   "push_expense_journals",
+  "expense_voucher_entity",
   "prices_include_tax",
   "sap_cash_account",
   "section_auto_submit",
@@ -293,6 +294,13 @@
    "fieldname": "push_expense_journals",
    "fieldtype": "Check",
    "label": "Push Expenses as Journal Vouchers"
+  },
+  {
+   "depends_on": "push_expense_journals",
+   "description": "SAP entity for expense journals. Leave EMPTY to detect it automatically. Set it only when this Service Layer serves the voucher path under another name — 'Discover SAP Entities' lists what it really has. If no voucher path exists at all, expenses post as Journal Entries instead, straight to the ledger, and the log says so.",
+   "fieldname": "expense_voucher_entity",
+   "fieldtype": "Data",
+   "label": "Expense Voucher Entity (SAP)"
   },
   {
    "default": "1",

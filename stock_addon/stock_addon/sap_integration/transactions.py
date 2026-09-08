@@ -810,14 +810,74 @@ def push_field_expense_doc(doc):
     # The shape follows the object: JournalVouchers holds JournalEntries,
     # which holds the lines (JournalVouchers.JournalEntries.Lines in the
     # DI API), so the entry is nested rather than sent flat.
-    payload = {
-        "JournalEntries": [{
+    endpoint = _voucher_entity()
+    if endpoint:
+        # A voucher wraps its entry: JournalVouchers.JournalEntries.Lines
+        # in the DI API, so the entry is nested rather than flat.
+        payload = {
+            "JournalEntries": [{
+                "ReferenceDate": str(doc.expense_date),
+                "Memo": f"SalesPro {doc.name}"[:50],
+                "JournalEntryLines": lines,
+            }],
+        }
+        label = _("Expense Journal Voucher")
+    else:
+        # This Service Layer serves no voucher path. Posting the entry
+        # straight to the ledger is the only way the expense reaches SAP
+        # at all — but it is NOT what the setting promises, so say so
+        # rather than letting a draft silently become a posting.
+        endpoint = "JournalEntries"
+        payload = {
             "ReferenceDate": str(doc.expense_date),
             "Memo": f"SalesPro {doc.name}"[:50],
             "JournalEntryLines": lines,
-        }],
-    }
-    return _push(doc, "JournalVouchers", payload, _("Expense Journal Voucher"))
+        }
+        label = _("Expense Journal Entry")
+        _warn_no_voucher_entity()
+
+    return _push(doc, endpoint, payload, label)
+
+
+def _voucher_entity():
+    """What this SAP install calls the journal voucher path, or None.
+
+    "Unrecognized resource path" for /JournalVouchers is not proof the
+    company has no vouchers — it is proof this Service Layer does not
+    serve that name. Probe the paths that really respond, then fall back
+    to reading $metadata for anything voucher-shaped, before concluding
+    there is none.
+
+    A configured name wins outright: once 'Discover SAP Entities' has
+    named it, nobody should have to wait for a code change.
+    """
+    configured = (get_settings().get("expense_voucher_entity") or "").strip()
+    if configured:
+        return configured
+
+    client = SAPClient()
+    found = client.probe_entity(("JournalVouchers", "JournalVoucher"))
+    if found:
+        return found
+    try:
+        return client.find_entity("journal", "voucher") or client.find_entity("voucher")
+    except Exception:
+        return None
+
+
+def _warn_no_voucher_entity():
+    """Say it once an hour, not once per expense."""
+    key = "sap_no_voucher_entity"
+    if frappe.cache().get_value(key):
+        return
+    frappe.cache().set_value(key, 1, expires_in_sec=3600)
+    log_sap("Push", "Warning", "JournalEntries", message=(
+        "This SAP Service Layer serves no Journal Voucher path, so field expenses are "
+        "being posted as Journal Entries — straight into the general ledger, with no "
+        "draft for anyone to approve. Run 'Discover SAP Entities' and, if a voucher "
+        "entity is listed under another name, put it in 'Expense Voucher Entity' in "
+        "SAP Integration Settings. If SAP genuinely exposes none, this is the only way "
+        "the expense reaches SAP at all."))
 
 
 def on_field_expense_posted(doc):
