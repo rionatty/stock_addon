@@ -810,33 +810,35 @@ def push_field_expense_doc(doc):
     # The shape follows the object: JournalVouchers holds JournalEntries,
     # which holds the lines (JournalVouchers.JournalEntries.Lines in the
     # DI API), so the entry is nested rather than sent flat.
+    # A voucher, or nothing. Posting the entry straight to the ledger
+    # would put an unreviewed field expense into the accounts, which is
+    # the outcome the voucher exists to prevent — so a missing voucher
+    # path fails the push rather than quietly becoming a posting. The
+    # expense is unaffected either way: it is already posted in ERPNext,
+    # the push is guarded, and 'Retry Failed Pushes' sends it the moment
+    # the path is known.
     endpoint = _voucher_entity()
-    if endpoint:
-        # A voucher wraps its entry: JournalVouchers.JournalEntries.Lines
-        # in the DI API, so the entry is nested rather than flat.
-        payload = {
-            "JournalEntries": [{
-                "ReferenceDate": str(doc.expense_date),
-                "Memo": f"SalesPro {doc.name}"[:50],
-                "JournalEntryLines": lines,
-            }],
-        }
-        label = _("Expense Journal Voucher")
-    else:
-        # This Service Layer serves no voucher path. Posting the entry
-        # straight to the ledger is the only way the expense reaches SAP
-        # at all — but it is NOT what the setting promises, so say so
-        # rather than letting a draft silently become a posting.
-        endpoint = "JournalEntries"
-        payload = {
+    if not endpoint:
+        raise SAPError(
+            "This SAP Service Layer serves no Journal Voucher path — /JournalVouchers "
+            "answered 'Unrecognized resource path' and $metadata lists nothing "
+            "voucher-shaped. The expense has NOT been sent, because posting it as a "
+            "Journal Entry would put it straight into the general ledger with nobody "
+            "having approved it. Run 'Discover SAP Entities' and, if the voucher path "
+            "is listed under another name, set it as 'Expense Voucher Entity' in SAP "
+            "Integration Settings — then use 'Retry Failed Pushes'."
+        )
+
+    # A voucher wraps its entry: JournalVouchers.JournalEntries.Lines in
+    # the DI API, so the entry is nested rather than flat.
+    payload = {
+        "JournalEntries": [{
             "ReferenceDate": str(doc.expense_date),
             "Memo": f"SalesPro {doc.name}"[:50],
             "JournalEntryLines": lines,
-        }
-        label = _("Expense Journal Entry")
-        _warn_no_voucher_entity()
-
-    return _push(doc, endpoint, payload, label)
+        }],
+    }
+    return _push(doc, endpoint, payload, _("Expense Journal Voucher"))
 
 
 def _voucher_entity():
@@ -856,28 +858,17 @@ def _voucher_entity():
         return configured
 
     client = SAPClient()
-    found = client.probe_entity(("JournalVouchers", "JournalVoucher"))
+    found = client.probe_entity((
+        "JournalVouchers", "JournalVoucher",
+        # some installs expose the draft under a name of its own
+        "JournalVoucherEntries", "DraftJournalEntries",
+    ))
     if found:
         return found
     try:
         return client.find_entity("journal", "voucher") or client.find_entity("voucher")
     except Exception:
         return None
-
-
-def _warn_no_voucher_entity():
-    """Say it once an hour, not once per expense."""
-    key = "sap_no_voucher_entity"
-    if frappe.cache().get_value(key):
-        return
-    frappe.cache().set_value(key, 1, expires_in_sec=3600)
-    log_sap("Push", "Warning", "JournalEntries", message=(
-        "This SAP Service Layer serves no Journal Voucher path, so field expenses are "
-        "being posted as Journal Entries — straight into the general ledger, with no "
-        "draft for anyone to approve. Run 'Discover SAP Entities' and, if a voucher "
-        "entity is listed under another name, put it in 'Expense Voucher Entity' in "
-        "SAP Integration Settings. If SAP genuinely exposes none, this is the only way "
-        "the expense reaches SAP at all."))
 
 
 def on_field_expense_posted(doc):
