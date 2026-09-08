@@ -510,6 +510,22 @@ def on_sales_invoice_submit(doc, method=None):
 
 
 # ---------------------------------------------------- transfer request
+def _header_warehouse(doc, fieldname, lines, line_key):
+    """The SAP code for a transfer's header warehouse, or None.
+
+    Read from the document's own header first. When that is blank —
+    ERPNext does not insist on it — the lines answer instead, but only if
+    they all name the same warehouse: a request drawing from two sources
+    has no single header source, and choosing one would misstate the
+    document rather than complete it.
+    """
+    code = _sap_warehouse(doc.get(fieldname))
+    if code:
+        return code
+    codes = {line.get(line_key) for line in lines if line.get(line_key)}
+    return next(iter(codes)) if len(codes) == 1 else None
+
+
 def push_material_request_doc(doc):
     # ERPNext lets a Material Transfer request leave the source blank (it
     # is picked at Stock Entry time); SAP will not. Fall back to the
@@ -534,6 +550,24 @@ def push_material_request_doc(doc):
         "Comments": f"{ORIGIN_LABEL} {doc.name} — {doc.get('custom_narration') or 'van stock request'}"[:250],
         "StockTransferLines": lines,
     }
+
+    # The header warehouses — OWTQ.Filler and OWTQ.ToWhsCode, which SAP
+    # calls FromWarehouse and ToWarehouse. Left unset, SAP fills both from
+    # its own default and the request reads as a transfer from a warehouse
+    # to itself, however correct the lines underneath are. That is what
+    # made a pushed request show FG-WHSE at both ends while its lines said
+    # Dpot7328.
+    #
+    # The document's own header wins; failing that the lines decide, but
+    # only when they agree. A request drawing from two sources has no
+    # single header source, and inventing one would misstate it.
+    header_from = _header_warehouse(doc, "set_from_warehouse", lines, "FromWarehouseCode") \
+        or _sap_warehouse(default_source)
+    header_to = _header_warehouse(doc, "set_warehouse", lines, "WarehouseCode")
+    if header_from:
+        payload["FromWarehouse"] = header_from
+    if header_to:
+        payload["ToWarehouse"] = header_to
 
     # Mark it in SAP as van stock. The pull then finds the resulting
     # transfer by this flag rather than by DocEntry, so stock comes back
