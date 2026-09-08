@@ -331,6 +331,11 @@ doc_events = {
         # Stock Addon Settings asks for it.
         "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
     },
+    "Customer Visit": {
+        # coordinates from Sales Pro -> the visit on a map, with a line
+        # back to where the customer is registered
+        "validate": "stock_addon.stock_addon.doc_events.geo.set_location_map",
+    },
     "Customer": {
         # coordinates where the customer was registered -> a map, and the
         # fixed end of the line drawn on their documents
