@@ -487,19 +487,30 @@ SAP_CARDCODE_MAX = 15
 
 
 def _next_code_number(prefix):
-    """Continue the sequence from the highest existing <prefix><digits>."""
-    rows = frappe.db.sql(
-        """
-        SELECT custom_sap_cardcode FROM `tabCustomer`
-        WHERE custom_sap_cardcode LIKE %s
-        """,
-        (prefix + "%",),
-    )
+    """Continue the sequence from the highest existing <prefix><digits>.
+
+    Leads are scanned as well as customers. A lead keeps its CardCode
+    when it converts — SAP changes the partner's type rather than making
+    a new one — so a code issued to a lead is a code no customer may ever
+    be given. Scanning only customers would hand the same code out twice
+    and SAP would reject the conversion for a duplicate nothing here
+    could explain.
+    """
     highest = 0
-    for (code,) in rows:
-        tail = (code or "")[len(prefix):]
-        if tail.isdigit():
-            highest = max(highest, int(tail))
+    for doctype in ("Customer", "Lead"):
+        if not frappe.get_meta(doctype).get_field("custom_sap_cardcode"):
+            continue
+        rows = frappe.db.sql(
+            """
+            SELECT custom_sap_cardcode FROM `tab{0}`
+            WHERE custom_sap_cardcode LIKE %s
+            """.format(doctype),
+            (prefix + "%",),
+        )
+        for (code,) in rows:
+            tail = (code or "")[len(prefix):]
+            if tail.isdigit():
+                highest = max(highest, int(tail))
     return highest + 1
 
 

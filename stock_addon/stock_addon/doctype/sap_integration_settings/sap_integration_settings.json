@@ -35,6 +35,7 @@
   "push_sales_invoices",
   "push_credit_notes",
   "push_transfer_requests",
+  "push_leads",
   "column_break_push",
   "push_incoming_payments",
   "push_expense_journals",
@@ -268,6 +269,13 @@
    "fieldname": "push_transfer_requests",
    "fieldtype": "Check",
    "label": "Push Stock Transfer Requests"
+  },
+  {
+   "default": "0",
+   "description": "Leads created here become SAP business partners of type Lead. On conversion the SAME partner is changed to a customer and keeps its code, so nothing is duplicated and the lead's history follows it.",
+   "fieldname": "push_leads",
+   "fieldtype": "Check",
+   "label": "Push Leads"
   },
   {
    "fieldname": "column_break_push",

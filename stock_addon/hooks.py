@@ -363,10 +363,17 @@ doc_events = {
         # SAP: only when "Send Sales Orders" is On Submit — the handler checks
         "on_submit": "stock_addon.stock_addon.sap_integration.transactions.on_sales_order_submit",
     },
+    "Lead": {
+        # SAP has no lead object — a lead is a business partner of type
+        # cLid, and conversion changes that type on the same partner.
+        "after_insert": "stock_addon.stock_addon.sap_integration.leads.on_lead_insert",
+    },
     "Customer": {
         # coordinates where the customer was registered -> a map, and the
         # fixed end of the line drawn on their documents
         "validate": "stock_addon.stock_addon.doc_events.geo.set_location_map",
+        # made from a lead: keep its sales person and its SAP CardCode
+        "after_insert": "stock_addon.stock_addon.sap_integration.leads.on_customer_insert",
     },
     "Sales Person": {
         # On creation, auto-provision a Cost Center + Warehouse named after

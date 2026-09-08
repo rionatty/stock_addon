@@ -1012,5 +1012,41 @@
   "insert_after": "custom_location_map",
   "module": "Stock Addon",
   "description": "Straight-line distance between where this was raised and where the customer is registered. Empty when either end has no coordinates."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Lead-custom_sales_person",
+  "dt": "Lead",
+  "fieldname": "custom_sales_person",
+  "label": "Sales Person",
+  "fieldtype": "Link",
+  "options": "Sales Person",
+  "insert_after": "lead_owner",
+  "module": "Stock Addon",
+  "description": "The rep who brought this lead in. Carried onto the customer's sales team when the lead converts, and sent to SAP as the sales employee on the business partner."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Lead-custom_sap_cardcode",
+  "dt": "Lead",
+  "fieldname": "custom_sap_cardcode",
+  "label": "SAP CardCode",
+  "fieldtype": "Data",
+  "insert_after": "custom_sales_person",
+  "read_only": 1,
+  "module": "Stock Addon",
+  "description": "The business partner SAP created for this lead. The customer keeps this same code on conversion — SAP changes the partner's type rather than making a second one."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Lead-custom_sap_sync_status",
+  "dt": "Lead",
+  "fieldname": "custom_sap_sync_status",
+  "label": "SAP Sync Status",
+  "fieldtype": "Select",
+  "options": "\nSynced\nFailed",
+  "insert_after": "custom_sap_cardcode",
+  "read_only": 1,
+  "module": "Stock Addon"
  }
 ]
