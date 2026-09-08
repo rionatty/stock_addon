@@ -10,7 +10,8 @@ Wired on on_submit (hooks.py), all guarded by SAP Integration Settings:
   Sales Invoice            → /Invoices        (is_return → /CreditNotes)
   Material Request (MT)    → /InventoryTransferRequests
   Payment Entry (Receive)  → /IncomingPayments
-  Field Expense (Posted)   → /JournalEntries  (called from make_journal_entry)
+  Field Expense (Posted)   → /JournalVouchers (a DRAFT journal entry: SAP
+                             posts it to the ledger, we do not)
 
 Design rules:
   - a push failure NEVER blocks the ERPNext submission — every on_* entry
@@ -765,19 +766,31 @@ def push_field_expense_doc(doc):
         "LineMemo": f"Field Expense {doc.name}"[:50],
     }, **costing))
 
+    # A Journal Voucher, not a Journal Entry. The DI reference is explicit
+    # about the difference: a voucher is a DRAFT for journal entries and
+    # "no values are created in the general ledger" until somebody in SAP
+    # posts it. Field expenses claimed from a phone are reviewed before
+    # they hit the ledger, which is the whole reason the setting has
+    # always been called "Push Expenses as Journal Vouchers".
+    #
+    # The shape follows the object: JournalVouchers holds JournalEntries,
+    # which holds the lines (JournalVouchers.JournalEntries.Lines in the
+    # DI API), so the entry is nested rather than sent flat.
     payload = {
-        "ReferenceDate": str(doc.expense_date),
-        "Memo": f"SalesPro {doc.name}"[:50],
-        "JournalEntryLines": lines,
+        "JournalEntries": [{
+            "ReferenceDate": str(doc.expense_date),
+            "Memo": f"SalesPro {doc.name}"[:50],
+            "JournalEntryLines": lines,
+        }],
     }
-    return _push(doc, "JournalEntries", payload, _("Expense Journal"))
+    return _push(doc, "JournalVouchers", payload, _("Expense Journal Voucher"))
 
 
 def on_field_expense_posted(doc):
     """Called from field_expense.make_journal_entry after posting."""
     if not integration_enabled("push_expense_journals"):
         return
-    _guarded(push_field_expense_doc, doc, "JournalEntries")
+    _guarded(push_field_expense_doc, doc, "JournalVouchers")
 
 
 # --------------------------------------------------------------- retry
