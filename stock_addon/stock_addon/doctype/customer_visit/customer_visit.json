@@ -1,0 +1,180 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:VIS-{YYYY}-{#####}",
+ "creation": "2026-09-07 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "customer",
+  "customer_name",
+  "sales_person",
+  "column_break_visit",
+  "visit_date",
+  "check_in",
+  "check_out",
+  "section_outcome",
+  "outcome",
+  "made_sale",
+  "column_break_outcome",
+  "feedback",
+  "section_location",
+  "custom_location_coordinates",
+  "custom_location_map",
+  "custom_location_distance"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "description": "The rep who made the visit.",
+   "fieldname": "sales_person",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Sales Person",
+   "options": "Sales Person"
+  },
+  {
+   "fieldname": "column_break_visit",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "visit_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Visit Date",
+   "reqd": 1
+  },
+  {
+   "description": "When the rep arrived, as sent by the app (yyyy-MM-dd HH:mm:ss).",
+   "fieldname": "check_in",
+   "fieldtype": "Datetime",
+   "label": "Check In"
+  },
+  {
+   "description": "When the rep left. Empty on a visit the app never closed.",
+   "fieldname": "check_out",
+   "fieldtype": "Datetime",
+   "label": "Check Out"
+  },
+  {
+   "fieldname": "section_outcome",
+   "fieldtype": "Section Break",
+   "label": "Outcome"
+  },
+  {
+   "fieldname": "outcome",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Outcome",
+   "options": "\nOrder placed\nNo order\nCustomer absent\nShop closed\nPayment collected\nFollow-up required"
+  },
+  {
+   "default": "0",
+   "description": "Set by the app when the visit produced an order.",
+   "fieldname": "made_sale",
+   "fieldtype": "Check",
+   "label": "Made Sale"
+  },
+  {
+   "fieldname": "column_break_outcome",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The rep's note on the visit. The app requires one, so this is always filled.",
+   "fieldname": "feedback",
+   "fieldtype": "Small Text",
+   "label": "Feedback"
+  },
+  {
+   "fieldname": "section_location",
+   "fieldtype": "Section Break",
+   "label": "Location"
+  },
+  {
+   "description": "Where the rep was standing, as sent by Sales Pro: latitude, longitude. Omitted when the phone had no GPS fix.",
+   "fieldname": "custom_location_coordinates",
+   "fieldtype": "Data",
+   "label": "Location (Coordinates)"
+  },
+  {
+   "description": "Drawn from the coordinates: where the visit happened, where the customer is registered, and the line between them. Read-only — correct the coordinates and it redraws on save.",
+   "fieldname": "custom_location_map",
+   "fieldtype": "Geolocation",
+   "label": "Location",
+   "read_only": 1
+  },
+  {
+   "description": "How far the visit was from the customer's registered location. Empty when either end has no coordinates.",
+   "fieldname": "custom_location_distance",
+   "fieldtype": "Float",
+   "label": "Distance From Customer (km)",
+   "precision": "2",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-07 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Stock Addon",
+ "name": "Customer Visit",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "visit_date",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
