@@ -79,7 +79,31 @@
 		setTimeout(tick, POLL_MS);
 	}
 
+	const AMOUNT_FIELDS = ["paid_amount", "received_amount", "base_paid_amount", "base_received_amount"];
+
+	// ERPNext only fills Paid Amount when it is empty (get_outstanding_documents:
+	// `if (!frm.doc.paid_amount)`). Switch from one party to another and the
+	// first party's amount stays, so the new party's invoices are allocated
+	// against a figure that was never theirs.
+	//
+	// Cleared by direct assignment, not set_value: set_value would fire
+	// ERPNext's allocation round trip, whose stale copy of the form lands back
+	// on top of the invoices fetched for the new party.
+	function clear_amounts(frm) {
+		AMOUNT_FIELDS.forEach((fieldname) => {
+			frm.doc[fieldname] = 0;
+			frm.refresh_field(fieldname);
+		});
+	}
+
 	function fetch_and_allocate(frm) {
+		// Only when the invoices on the form belong to a DIFFERENT party. The
+		// first selection keeps an amount the cashier typed before choosing.
+		if (frm.__sa_fetched_party && frm.__sa_fetched_party !== frm.doc.party) {
+			clear_amounts(frm);
+		}
+		frm.__sa_fetched_party = frm.doc.party;
+
 		frappe.flags.allocate_payment_amount = true;
 		// No date filters: the button's dialog defaults to the last 30 days,
 		// which silently drops older invoices from the table.
@@ -121,6 +145,9 @@
 			// those a Paid Amount change zeroes the allocations instead of
 			// redistributing them.
 			if (frm.doc.docstatus === 0) frappe.flags.allocate_payment_amount = true;
+			// A saved draft, or one made from an invoice, already holds a party's
+			// amounts — so choosing a different party is a switch, not a first pick.
+			frm.__sa_fetched_party = frm.doc.party || null;
 		},
 
 		party(frm) {
