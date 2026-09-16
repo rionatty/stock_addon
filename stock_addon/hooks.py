@@ -19,10 +19,13 @@ app_include_css = "stock_addon.bundle.css"
 #    watch the route instead)
 #  - stock_addon_theme.js: colour overrides + status indicator colours
 #  - form_sidebar_toggle.js: collapse/expand the right-hand form panel
+#  - trial_balance_report.js: Trial Balance printout with the account code
+#    and the ledger name in separate columns
 app_include_js = [
     "/assets/stock_addon/js/general_ledger_report.js",
     "/assets/stock_addon/js/stock_addon_theme.js",
     "/assets/stock_addon/js/form_sidebar_toggle.js",
+    "/assets/stock_addon/js/trial_balance_report.js",
 ]
 
 # Ship the desk colour overrides ("Stock Addon Theme Settings") with the
