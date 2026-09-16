@@ -534,7 +534,7 @@
   "fieldname": "custom_sales_pro_reference",
   "label": "Sales Pro Reference",
   "fieldtype": "Data",
-  "insert_after": "custom_sap_docnum",
+  "insert_after": "custom_narration",
   "module": "Stock Addon",
   "description": "The document's own number in the Sales Pro app — what the rep sees on their phone, including the offline number it was given before it reached ERPNext. Lets a document here be traced back to the one they raised. Not unique: offline numbers are issued per device, so two reps can produce the same one.",
   "in_standard_filter": 1
@@ -569,7 +569,7 @@
   "fieldname": "custom_location_coordinates",
   "label": "Location (Coordinates)",
   "fieldtype": "Data",
-  "insert_after": "custom_sap_docnum",
+  "insert_after": "party_account_currency",
   "description": "Where the rep was standing when this was raised, as sent by Sales Pro: latitude, longitude — e.g. 0.3476, 32.5825. The map beside it is drawn from this.",
   "module": "Stock Addon"
  },
@@ -592,7 +592,7 @@
   "fieldname": "custom_location_coordinates",
   "label": "Location (Coordinates)",
   "fieldtype": "Data",
-  "insert_after": "custom_sap_docnum",
+  "insert_after": "remarks",
   "description": "Where the rep was standing when this was raised, as sent by Sales Pro: latitude, longitude — e.g. 0.3476, 32.5825. The map beside it is drawn from this.",
   "module": "Stock Addon"
  },
@@ -615,7 +615,7 @@
   "fieldname": "custom_location_coordinates",
   "label": "Location (Coordinates)",
   "fieldtype": "Data",
-  "insert_after": "custom_sap_salesperson",
+  "insert_after": "custom_journey_plan",
   "module": "Stock Addon",
   "description": "Where this customer was registered, as latitude, longitude — e.g. 0.3476, 32.5825. Every invoice, order and payment raised for them is drawn as a line back to this point, so a document booked somewhere else is visible at a glance."
  },
