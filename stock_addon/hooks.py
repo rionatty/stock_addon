@@ -310,9 +310,6 @@ doc_events = {
     },
     "Material Request": {
         "validate": "stock_addon.stock_addon.doctype.material_request.material_request.calculate_total_qty",
-        # The app posts van requests as drafts — submit them on arrival if
-        # Stock Addon Settings asks for it.
-        "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
     },
     "Landed Cost Voucher": {
         "on_submit": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
@@ -329,9 +326,6 @@ doc_events = {
     },
     "Sales Order": {
         "validate": "stock_addon.stock_addon.doc_events.geo.set_location_map",
-        # The app posts orders as drafts — submit them on arrival if
-        # Stock Addon Settings asks for it.
-        "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
     },
     "Customer Visit": {
         # coordinates from Sales Pro -> the visit on a map, with a line
@@ -347,11 +341,6 @@ doc_events = {
         # On creation, auto-provision a Cost Center + Warehouse named after
         # the sales person's own code.
         "after_insert": "stock_addon.stock_addon.doc_events.sales_person.after_insert",
-    },
-    "Field Expense": {
-        # Not submittable: "auto-submit" here means raising its Journal
-        # Entry, which is what posts it.
-        "after_insert": "stock_addon.stock_addon.doc_events.auto_submit.after_insert",
     },
     "Quality Inspection": {
         # Copy the QC disposition (Batch Status) onto the linked Batch.
