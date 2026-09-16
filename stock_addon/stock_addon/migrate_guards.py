@@ -116,4 +116,10 @@ def _column_type(doctype, fieldname):
 
 
 def _count(query, values=None):
+    # Omit values entirely when there are none. frappe.db.sql treats only its
+    # own EmptyQueryValues sentinel as "no parameters"; an explicit None is
+    # wrapped into (None,), and MySQLdb then refuses to substitute it into a
+    # query with no placeholders.
+    if values is None:
+        return frappe.db.sql(query)[0][0]
     return frappe.db.sql(query, values)[0][0]
