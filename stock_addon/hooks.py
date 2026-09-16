@@ -125,6 +125,14 @@ doctype_list_js = {
 
 # Migration
 # ---------
+# Clean every numeric custom field BEFORE anything tries to convert it.
+# Runs on every migrate, not once like a patch: MariaDB aborts the whole
+# migrate if one row holds a NULL or non-numeric text when a column becomes
+# decimal NOT NULL, and a one-shot patch cannot catch data written after it.
+before_migrate = [
+    "stock_addon.stock_addon.migrate_guards.coerce_numeric_custom_fields",
+]
+
 # Inject the Inventory Counting link + all Stock Addon reports into the
 # right standard workspaces (idempotent + self-healing on every migrate).
 after_migrate = [
