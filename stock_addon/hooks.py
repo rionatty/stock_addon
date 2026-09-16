@@ -148,6 +148,8 @@ after_migrate = [
     "stock_addon.stock_addon.client_scripts.install_work_order_form_script",
     "stock_addon.stock_addon.client_scripts.install_sales_person_form_script",
     "stock_addon.stock_addon.client_scripts.install_payment_entry_form_script",
+    # Payment Entry: Transaction ID above Taxes and Charges, and Taxes folded
+    "stock_addon.stock_addon.payment_entry_layout.apply_payment_entry_layout",
     "stock_addon.stock_addon.client_scripts.remove_customer_list_script",
     # Switch off leftover Client Scripts that call an uninstalled app
     # (e.g. the old standalone "Batch Generation" script — that feature

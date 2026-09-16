@@ -10,10 +10,11 @@
 //     skip allocating — it sets every allocated amount to zero
 //     (payment_entry.py, allocate_amount_to_references).
 //
-// Once the invoices are in the table, a change to Paid Amount reallocates
-// through ERPNext's own paid_amount -> reset_received_amount path. That only
-// ever looked broken because the table was empty until someone pressed the
-// button.
+// Total Outstanding is the party's LEDGER balance, the same figure as Total
+// Unpaid on their dashboard — not the sum of the invoices in the table. The
+// two differ whenever a payment was posted without being matched to an
+// invoice, and then the invoice sum tells a cashier to collect from a
+// customer who is actually in credit.
 //
 // Wrapped in an IIFE: Frappe concatenates every Form client script for a
 // doctype into a single new Function(), so nothing here may leak into that
@@ -30,6 +31,7 @@
 	// automatically would be a guess.
 	const PARTY_FOR = { Receive: "Customer", Pay: "Supplier" };
 	const TOTAL_FIELD = "custom_total_outstanding";
+	const BALANCE_METHOD = "stock_addon.stock_addon.payment_entry_balance.get_party_balance";
 
 	const POLL_MS = 150;
 	const QUIET_TICKS = 3; // ~450 ms with nothing in flight
@@ -54,57 +56,63 @@
 		if (flt(frm.doc[TOTAL_FIELD]) !== flt(value)) frm.set_value(TOTAL_FIELD, value);
 	}
 
-	// What the party owes: open invoices less credit notes, orders excluded —
-	// the same netting ERPNext applies when it decides the Paid Amount in
-	// get_outstanding_documents.
-	function outstanding_total(frm) {
-		const orders = frm.events.get_order_doctypes(frm);
-		let owed = 0;
-		let credit = 0;
-		(frm.doc.references || []).forEach((row) => {
-			if (orders.includes(row.reference_doctype)) return;
-			const amount = flt(row.outstanding_amount);
-			if (amount > 0) owed += amount;
-			else credit += Math.abs(amount);
-		});
-		return owed - credit;
+	// A new selection supersedes anything still waiting from the last one.
+	function next_token(frm) {
+		frm.__sa_outstanding_token = (frm.__sa_outstanding_token || 0) + 1;
+		return frm.__sa_outstanding_token;
 	}
 
-	function fetch_and_allocate(frm) {
-		if (!ready(frm)) {
-			set_total(frm, 0);
-			return;
-		}
-		frappe.flags.allocate_payment_amount = true;
-		// No date filters: the button's dialog defaults to the last 30 days,
-		// which silently drops older debts from both the table and the total.
-		const call = frm.events.get_outstanding_documents(frm, { allocate_payment_amount: 1 }, true, false);
-		if (call && typeof call.then === "function") {
-			call.then(() => set_total(frm, outstanding_total(frm)));
-		}
-	}
-
-	// Wait for ERPNext's own party handler to finish before fetching. It
-	// looks up the party's account, CLEARS the references table, then reads
-	// exchange rates — a fetch that lands before that clear is wiped by it.
-	// A fixed delay would be right on a fast server and wrong on a slow one,
-	// so this waits for the document to be ready and for nothing to have been
-	// in flight for a short quiet spell, however long that takes.
-	function schedule(frm) {
-		const token = (frm.__sa_outstanding_token || 0) + 1;
-		frm.__sa_outstanding_token = token;
+	// Run fn once `condition` holds and nothing has been in flight for a short
+	// quiet spell. Waiting for quiet rather than a fixed delay is what makes
+	// this right on a slow server as well as a fast one.
+	function when_settled(frm, token, condition, fn) {
 		let quiet = 0;
 		let ticks = 0;
-
 		const tick = () => {
 			if (frm.__sa_outstanding_token !== token) return; // a newer change took over
 			if (++ticks > GIVE_UP_TICKS) return;
 			const busy = ((frappe.request && frappe.request.ajax_count) || 0) > 0;
-			quiet = busy || !ready(frm) ? 0 : quiet + 1;
-			if (quiet >= QUIET_TICKS) return fetch_and_allocate(frm);
+			quiet = busy || !condition() ? 0 : quiet + 1;
+			if (quiet >= QUIET_TICKS) return fn();
 			setTimeout(tick, POLL_MS);
 		};
 		setTimeout(tick, POLL_MS);
+	}
+
+	function fetch_and_allocate(frm) {
+		frappe.flags.allocate_payment_amount = true;
+		// No date filters: the button's dialog defaults to the last 30 days,
+		// which silently drops older invoices from the table.
+		frm.events.get_outstanding_documents(frm, { allocate_payment_amount: 1 }, true, false);
+	}
+
+	function load_balance(frm, token) {
+		const d = frm.doc;
+		// Remember whose balance this is. The same round trip described below
+		// can put an earlier party back on the form, so a balance must only
+		// ever land beside the party it was fetched for.
+		const asked = { party_type: d.party_type, party: d.party, company: d.company };
+		const call = frappe.call({ method: BALANCE_METHOD, args: asked });
+		if (!call || typeof call.then !== "function") return;
+		call.then((r) => {
+			const balance = flt(r && r.message);
+			// Land it only once every request has settled. ERPNext's allocation
+			// is a server round trip that sends a copy of the form and writes
+			// that copy back when it returns — a value set before then is
+			// overwritten with the stale one. That is what left this at 0.00
+			// beside an invoice allocated for 750.
+			when_settled(frm, token, () => true, () => {
+				const now_on_form = frm.doc;
+				if (
+					now_on_form.party !== asked.party ||
+					now_on_form.party_type !== asked.party_type ||
+					now_on_form.company !== asked.company
+				) {
+					return; // the form moved on; its own selection sets its own total
+				}
+				set_total(frm, balance);
+			});
+		});
 	}
 
 	frappe.ui.form.on("Payment Entry", {
@@ -116,11 +124,18 @@
 		},
 
 		party(frm) {
+			const token = next_token(frm);
 			if (!applicable(frm)) {
 				set_total(frm, 0);
 				return;
 			}
-			schedule(frm);
+			// Wait for ERPNext's own party handler first. It looks up the
+			// party's account and then CLEARS the references table; a fetch
+			// that lands before that clear is wiped by it.
+			when_settled(frm, token, () => ready(frm), () => {
+				fetch_and_allocate(frm);
+				load_balance(frm, token);
+			});
 		},
 	});
 })();
