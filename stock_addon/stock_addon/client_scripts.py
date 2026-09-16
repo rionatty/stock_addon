@@ -79,6 +79,16 @@ def install_sales_person_form_script():
     )
 
 
+def install_payment_entry_form_script():
+    """Push public/js/payment_entry.js into the database as a Form Client Script."""
+    _upsert(
+        name     = "payment-entry-form-stock-addon",
+        dt       = "Payment Entry",
+        view     = "Form",
+        filename = "payment_entry.js",
+    )
+
+
 def install_work_order_form_script():
     """Push public/js/work_order.js into the database as a Form Client Script."""
     _upsert(

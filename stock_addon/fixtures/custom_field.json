@@ -669,5 +669,18 @@
   "insert_after": "custom_location_map",
   "module": "Stock Addon",
   "description": "Straight-line distance between where this was raised and where the customer is registered. Empty when either end has no coordinates."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Payment Entry-custom_total_outstanding",
+  "dt": "Payment Entry",
+  "fieldname": "custom_total_outstanding",
+  "label": "Total Outstanding",
+  "fieldtype": "Currency",
+  "options": "paid_from_account_currency",
+  "insert_after": "paid_amount",
+  "read_only": 1,
+  "module": "Stock Addon",
+  "description": "What the party owed across their open invoices, less credit notes, when they were selected. Filled in automatically along with the invoices themselves."
  }
 ]
