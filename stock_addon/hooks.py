@@ -328,10 +328,21 @@ doc_events = {
         "validate": "stock_addon.stock_addon.doctype.material_request.material_request.calculate_total_qty",
     },
     "Landed Cost Voucher": {
-        # one Purchase Invoice per charge supplier, submitted straight away
-        "on_submit": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
-        # ...and cancelled with the voucher, so an amendment cannot bill twice
-        "on_cancel": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.cancel_purchase_invoices_from_landed_cost_voucher",
+        # Landed Cost lines with no amount are dropped before anything else
+        "before_validate": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.remove_uncharged_lines",
+        # VAT Paid: both accounts set, and neither one on a Landed Cost line
+        "validate": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.validate_vat_paid",
+        "on_submit": [
+            # one Purchase Invoice per charge supplier, submitted straight away
+            "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
+            # VAT Paid moved from Prepaid VAT to the VAT control account
+            "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.post_vat_journal_entry",
+        ],
+        # ...all cancelled with the voucher, so an amendment cannot post twice
+        "on_cancel": [
+            "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.cancel_purchase_invoices_from_landed_cost_voucher",
+            "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.cancel_vat_journal_entry",
+        ],
     },
     "Sales Invoice": {
         "validate": [

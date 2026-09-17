@@ -682,5 +682,90 @@
   "read_only": 1,
   "module": "Stock Addon",
   "description": ""
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Account-custom_is_landed_cost_account",
+  "dt": "Account",
+  "fieldname": "custom_is_landed_cost_account",
+  "label": "Landed Cost Account",
+  "fieldtype": "Check",
+  "insert_after": "account_type",
+  "default": "0",
+  "depends_on": "eval:!doc.is_group",
+  "description": "Added as a line on the Landed Cost table of every new Landed Cost Voucher.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Landed Cost Voucher-custom_vat_paid_section",
+  "dt": "Landed Cost Voucher",
+  "fieldname": "custom_vat_paid_section",
+  "label": "VAT Paid",
+  "fieldtype": "Section Break",
+  "insert_after": "distribute_charges_based_on",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Landed Cost Voucher-custom_vat_paid",
+  "dt": "Landed Cost Voucher",
+  "fieldname": "custom_vat_paid",
+  "label": "VAT Paid",
+  "fieldtype": "Currency",
+  "insert_after": "custom_vat_paid_section",
+  "options": "Company:company:default_currency",
+  "non_negative": 1,
+  "description": "Import VAT already paid. On submit a Journal Entry moves it from the Prepaid VAT Account to the VAT Control Account. It is never added to item cost.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Landed Cost Voucher-custom_vat_journal_entry",
+  "dt": "Landed Cost Voucher",
+  "fieldname": "custom_vat_journal_entry",
+  "label": "VAT Journal Entry",
+  "fieldtype": "Link",
+  "insert_after": "custom_vat_paid",
+  "options": "Journal Entry",
+  "read_only": 1,
+  "no_copy": 1,
+  "depends_on": "eval:doc.custom_vat_journal_entry",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Landed Cost Voucher-custom_vat_column_break",
+  "dt": "Landed Cost Voucher",
+  "fieldname": "custom_vat_column_break",
+  "fieldtype": "Column Break",
+  "insert_after": "custom_vat_journal_entry",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Landed Cost Voucher-custom_prepaid_vat_account",
+  "dt": "Landed Cost Voucher",
+  "fieldname": "custom_prepaid_vat_account",
+  "label": "Prepaid VAT Account",
+  "fieldtype": "Link",
+  "insert_after": "custom_vat_column_break",
+  "options": "Account",
+  "mandatory_depends_on": "eval:doc.custom_vat_paid",
+  "description": "Credited with the VAT Paid.",
+  "module": "Stock Addon"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Landed Cost Voucher-custom_vat_control_account",
+  "dt": "Landed Cost Voucher",
+  "fieldname": "custom_vat_control_account",
+  "label": "VAT Control Account",
+  "fieldtype": "Link",
+  "insert_after": "custom_prepaid_vat_account",
+  "options": "Account",
+  "mandatory_depends_on": "eval:doc.custom_vat_paid",
+  "description": "Debited with the VAT Paid.",
+  "module": "Stock Addon"
  }
 ]
