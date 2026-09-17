@@ -165,7 +165,15 @@ after_migrate = [
     # Standard GL: turn off add_total_row (the client-side footer doubled
     # Debit/Credit and summed the Running Balance into a meaningless number).
     "stock_addon.stock_addon.report_patches.disable_gl_footer_total",
+    # A tax row starts "included in the basic rate", on both tax tables
+    "stock_addon.stock_addon.tax_inclusive.apply_inclusive_tax_default",
 ]
+
+# A tax template's rows arrive inclusive, so the form shows the inclusive
+# totals as soon as the template is chosen (tax_inclusive.py).
+override_whitelisted_methods = {
+    "erpnext.controllers.accounts_controller.get_taxes_and_charges": "stock_addon.stock_addon.tax_inclusive.get_taxes_and_charges",
+}
 
 # Standard GL report is patched server-side via a module-level monkey patch
 # installed in stock_addon/__init__.py — it wraps
@@ -283,9 +291,30 @@ override_doctype_class = {
 # NOTE: doc_events must be assigned exactly ONCE in this module — a second
 # assignment silently replaces the first and Frappe only sees the last one.
 
+# Every tax row on a sales or purchase document is marked "included in the
+# basic rate" before the document is totalled — prices here are quoted
+# tax-inclusive. See stock_addon/stock_addon/tax_inclusive.py.
+INCLUDE_TAXES_IN_RATE = "stock_addon.stock_addon.tax_inclusive.include_taxes_in_rate"
+
 doc_events = {
+    "Quotation": {
+        "before_validate": INCLUDE_TAXES_IN_RATE,
+    },
+    "Supplier Quotation": {
+        "before_validate": INCLUDE_TAXES_IN_RATE,
+    },
+    "Purchase Order": {
+        "before_validate": INCLUDE_TAXES_IN_RATE,
+    },
+    "Purchase Invoice": {
+        "before_validate": INCLUDE_TAXES_IN_RATE,
+    },
+    "POS Invoice": {
+        "before_validate": INCLUDE_TAXES_IN_RATE,
+    },
     "Purchase Receipt": {
         # "validate": "stock_addon.stock_addon.api.get_last_purchase_details_custom",
+        "before_validate": INCLUDE_TAXES_IN_RATE,
         "on_submit": [
             "stock_addon.stock_addon.doctype.purchase_receipt.purchase_receipt.create_lc",
             "stock_addon.stock_addon.doctype.purchase_receipt.purchase_receipt.create_outward_gate_pass_from_purchase_receipt",
@@ -322,6 +351,7 @@ doc_events = {
         ]
     },
     "Delivery Note": {
+        "before_validate": INCLUDE_TAXES_IN_RATE,
         "on_submit": "stock_addon.stock_addon.doctype.delivery_note.delivery_note.create_outward_gate_pass_from_delivery_note",
     },
     "Material Request": {
@@ -345,6 +375,7 @@ doc_events = {
         ],
     },
     "Sales Invoice": {
+        "before_validate": INCLUDE_TAXES_IN_RATE,
         "validate": [
             "stock_addon.stock_addon.doc_events.sales_invoice.validate",
             # coordinates from Sales Pro -> a map on the document
@@ -355,6 +386,7 @@ doc_events = {
         "validate": "stock_addon.stock_addon.doc_events.geo.set_location_map",
     },
     "Sales Order": {
+        "before_validate": INCLUDE_TAXES_IN_RATE,
         "validate": "stock_addon.stock_addon.doc_events.geo.set_location_map",
     },
     "Customer Visit": {
