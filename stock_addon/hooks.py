@@ -143,6 +143,8 @@ after_migrate = [
     "stock_addon.stock_addon.workspace_setup.add_route_and_sales_reports_to_accounts_workspace",
     "stock_addon.stock_addon.workspace_setup.add_summarized_stock_report_shortcut",
     "stock_addon.stock_addon.workspace_setup.add_journey_plan_to_accounts_workspace",
+    # Landed Cost Voucher shown on Buying (beside Purchase Invoice), not Stock
+    "stock_addon.stock_addon.workspace_setup.move_landed_cost_voucher_to_buying_workspace",
     # Fields on another app's doctype — created here, not as fixtures, so a
     # site without HRMS loses the feature rather than the migrate.
     "stock_addon.stock_addon.hr_fields.ensure_hr_fields",
@@ -326,7 +328,10 @@ doc_events = {
         "validate": "stock_addon.stock_addon.doctype.material_request.material_request.calculate_total_qty",
     },
     "Landed Cost Voucher": {
+        # one Purchase Invoice per charge supplier, submitted straight away
         "on_submit": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.create_purchase_invoice_from_landed_cost_voucher_taxes",
+        # ...and cancelled with the voucher, so an amendment cannot bill twice
+        "on_cancel": "stock_addon.stock_addon.doctype.landed_cost_voucher.landed_cost_voucher.cancel_purchase_invoices_from_landed_cost_voucher",
     },
     "Sales Invoice": {
         "validate": [

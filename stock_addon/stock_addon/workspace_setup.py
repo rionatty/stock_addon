@@ -328,3 +328,176 @@ def add_journey_plan_to_accounts_workspace():
 	ws.flags.ignore_permissions = True
 	ws.save()
 	frappe.db.commit()
+
+
+# ─── Landed Cost Voucher: Buying, not Stock ────────────────────────────────
+LANDED_COST_VOUCHER = "Landed Cost Voucher"
+BUYING_WORKSPACE = "Buying"
+# the card holding Material Request, Purchase Order and Purchase Invoice
+BUYING_CARD = "Buying"
+BUYING_ANCHOR_AFTER = "Purchase Invoice"
+
+
+def move_landed_cost_voucher_to_buying_workspace():
+	"""Show Landed Cost Voucher on the Buying workspace instead of Stock.
+
+	ERPNext lists it on Stock, in the Tools card. Its charges are billed by
+	suppliers — the voucher raises their Purchase Invoices — so it now sits
+	beside Purchase Invoice in Buying's "Buying" card. A shortcut tile for it
+	on Stock, if one was added, moves to Buying's shortcuts too.
+
+	Runs on after_migrate and converges on that state, so an ERPNext update
+	that restores the standard workspaces is put right on the next migrate.
+	It comes off Stock only once Buying shows it: never lost from both.
+	"""
+	for name in (STOCK_WORKSPACE, BUYING_WORKSPACE):
+		if not frappe.db.exists("Workspace", name):
+			return
+
+	stock = frappe.get_doc("Workspace", STOCK_WORKSPACE)
+	buying = frappe.get_doc("Workspace", BUYING_WORKSPACE)
+
+	# Keep the link as it looked on Stock (label, onboarding flag, ...).
+	on_stock = next((l for l in stock.links if l.type == "Link" and l.link_to == LANDED_COST_VOUCHER), None)
+	link = {
+		"type": "Link",
+		"label": LANDED_COST_VOUCHER,
+		"link_type": "DocType",
+		"link_to": LANDED_COST_VOUCHER,
+		"onboard": 0,
+		"is_query_report": 0,
+		"hidden": 0,
+	}
+	if on_stock:
+		link.update({f: on_stock.get(f) for f in ("label", "onboard", "dependencies", "only_for", "description", "icon")})
+
+	buying_changed = _insert_link_in_card(buying, BUYING_CARD, BUYING_ANCHOR_AFTER, link)
+	if not _shows_link(buying, LANDED_COST_VOUCHER):
+		return  # Buying has no visible card to take it: leave it on Stock
+
+	for tile in [s for s in stock.shortcuts if s.link_to == LANDED_COST_VOUCHER]:
+		buying_changed = _copy_shortcut_tile(buying, tile) or buying_changed
+
+	stock_changed = _remove_from_workspace(stock, LANDED_COST_VOUCHER)
+
+	for ws, changed in ((buying, buying_changed), (stock, stock_changed)):
+		if changed:
+			ws.flags.ignore_permissions = True
+			ws.save()
+	if buying_changed or stock_changed:
+		frappe.db.commit()
+
+
+def _content_blocks(ws):
+	import json
+
+	try:
+		content = json.loads(ws.content or "[]")
+	except Exception:
+		content = []
+	return content if isinstance(content, list) else []
+
+
+def _card_of(ws, index):
+	"""Label of the card the link row at `index` belongs to."""
+	return next((ws.links[i].label for i in range(index, -1, -1) if ws.links[i].type == "Card Break"), None)
+
+
+def _shows_link(ws, link_to):
+	"""Whether the workspace page actually displays a link to `link_to`: the
+	desk renders only the cards named in the content blocks."""
+	cards = {(b.get("data") or {}).get("card_name") for b in _content_blocks(ws) if b.get("type") == "card"}
+	return any(l.type == "Link" and l.link_to == link_to and _card_of(ws, i) in cards for i, l in enumerate(ws.links))
+
+
+def _recount_cards(ws, labels):
+	"""Correct link_count on the named cards. Editing a card on the desk
+	deletes that many rows after its Card Break, so a stale count would eat
+	into the next card."""
+	card = None
+	for l in ws.links:
+		if l.type == "Card Break":
+			card = l if l.label in labels else None
+			if card:
+				card.link_count = 0
+		elif card:
+			card.link_count += 1
+
+
+def _reindex_links(ws):
+	for idx, l in enumerate(ws.links, start=1):
+		l.idx = idx
+
+
+def _insert_link_in_card(ws, card_label, anchor_after, row):
+	"""Put a link row into a card, just after `anchor_after` when the card has
+	it, else at the end of the card. False when the workspace already links
+	there, or has no such card."""
+	if any(l.type == "Link" and l.link_to == row["link_to"] for l in ws.links):
+		return False
+
+	start = next((i for i, l in enumerate(ws.links) if l.type == "Card Break" and l.label == card_label), None)
+	if start is None:
+		return False
+	end = next((i for i in range(start + 1, len(ws.links)) if ws.links[i].type == "Card Break"), len(ws.links))
+	anchor = next((i for i in range(start + 1, end) if ws.links[i].link_to == anchor_after), None)
+
+	ws.append("links", row)
+	ws.links.insert(anchor + 1 if anchor is not None else end, ws.links.pop())
+	_reindex_links(ws)
+	_recount_cards(ws, {card_label})
+	return True
+
+
+SHORTCUT_FIELDS = (
+	"type", "link_to", "url", "doc_view", "kanban_board", "label", "icon",
+	"restrict_to_domain", "report_ref_doctype", "stats_filter", "color", "format",
+)
+
+
+def _copy_shortcut_tile(ws, tile):
+	"""Add a copy of a shortcut tile to `ws`, placed after its last tile."""
+	import json
+
+	if any(s.link_to == tile.link_to for s in ws.shortcuts):
+		return False
+
+	ws.append("shortcuts", {f: tile.get(f) for f in SHORTCUT_FIELDS if tile.get(f) is not None})
+
+	content = _content_blocks(ws)
+	if not any(b.get("type") == "shortcut" and (b.get("data") or {}).get("shortcut_name") == tile.label for b in content):
+		last_tile = max((i for i, b in enumerate(content) if b.get("type") == "shortcut"), default=len(content) - 1)
+		content.insert(last_tile + 1, {
+			"id": frappe.generate_hash(length=10),
+			"type": "shortcut",
+			"data": {"shortcut_name": tile.label, "col": 3},
+		})
+		ws.content = json.dumps(content)
+	return True
+
+
+def _remove_from_workspace(ws, link_to):
+	"""Take every link and shortcut tile for `link_to` off a workspace."""
+	import json
+
+	gone = [i for i, l in enumerate(ws.links) if l.type == "Link" and l.link_to == link_to]
+	tiles = [s for s in ws.shortcuts if s.link_to == link_to]
+	if not gone and not tiles:
+		return False
+
+	cards = {_card_of(ws, i) for i in gone}
+	ws.links[:] = [l for i, l in enumerate(ws.links) if i not in gone]
+	_reindex_links(ws)
+	_recount_cards(ws, cards)
+
+	if tiles:
+		labels = {s.label for s in tiles}
+		ws.shortcuts[:] = [s for s in ws.shortcuts if s.link_to != link_to]
+		for idx, s in enumerate(ws.shortcuts, start=1):
+			s.idx = idx
+		content = [
+			b for b in _content_blocks(ws)
+			if not (b.get("type") == "shortcut" and (b.get("data") or {}).get("shortcut_name") in labels)
+		]
+		ws.content = json.dumps(content)
+	return True

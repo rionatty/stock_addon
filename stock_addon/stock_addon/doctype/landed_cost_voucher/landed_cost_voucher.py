@@ -3,6 +3,12 @@ from frappe.utils import flt, now_datetime
 from erpnext.accounts.doctype.purchase_invoice.purchase_invoice import PurchaseInvoice
 from frappe import _
 
+# The series of every invoice created here — purchase_invoice_override.py
+# exempts it from the PO/PR requirement, and cancelling a voucher uses it to
+# find the invoices that voucher made.
+SERVICES_SERIES = "PINV-SERVICES-.###.-.YY."
+
+
 @frappe.whitelist()
 def create_purchase_invoice_from_landed_cost_voucher_taxes(doc, method):
     # Group the charge rows by supplier so each supplier gets exactly ONE
@@ -25,7 +31,7 @@ def create_purchase_invoice_from_landed_cost_voucher_taxes(doc, method):
         pi = frappe.get_doc({
             "doctype": "Purchase Invoice",
             "purchase_invoice_type": "Landed Cost Voucher",
-            "naming_series": "PINV-SERVICES-.###.-.YY.",
+            "naming_series": SERVICES_SERIES,
             "supplier": supplier,
             "grand_total": total_amount,
             "posting_date": now_datetime(),
@@ -66,13 +72,73 @@ def create_purchase_invoice_from_landed_cost_voucher_taxes(doc, method):
         frappe.local.form_dict["_lcv_invoice_doc"] = pi
         pi.insert(ignore_permissions=True)
         frappe.local.form_dict.pop("_lcv_invoice_doc", None)  # Clean up after insert
-        frappe.msgprint(
-            _("Created Purchase Invoice {0} for {1} with {2} charge line(s), total {3}").format(
-                pi.name, supplier, len(charge_rows), frappe.format_value(total_amount, {"fieldtype": "Currency"})
+
+        amount = frappe.format_value(total_amount, {"fieldtype": "Currency"})
+        refused = _submit_purchase_invoice(pi)
+        if refused:
+            frappe.msgprint(
+                _("Created Purchase Invoice {0} for {1} with {2} charge line(s), total {3}, but it could not be submitted and is saved as a draft: {4}").format(
+                    pi.name, supplier, len(charge_rows), amount, refused
+                ),
+                indicator="orange",
             )
-        )
+        else:
+            frappe.msgprint(
+                _("Created and submitted Purchase Invoice {0} for {1} with {2} charge line(s), total {3}").format(
+                    pi.name, supplier, len(charge_rows), amount
+                )
+            )
 
         series_counter += 1
+
+
+def _submit_purchase_invoice(pi):
+    """Submit an invoice this voucher has just created.
+
+    Returns None once it is submitted, or ERPNext's reason for refusing. A
+    refused invoice stays a draft, as every one did before, and the voucher
+    still submits: a problem with one supplier's invoice never holds the
+    landed cost back from the stock valuation.
+    """
+    savepoint = "lcv_purchase_invoice_submit"
+    messages_before = len(frappe.local.message_log)
+    frappe.db.savepoint(savepoint)
+    try:
+        pi.submit()  # insert(ignore_permissions=True) left that flag set for the submit too
+    except Exception as e:
+        # Undo only the half-finished submit; the draft inserted above stays.
+        frappe.db.rollback(save_point=savepoint)
+        # ERPNext queued its refusal as an error popup as well; the caller
+        # reports it once, beside the invoice it concerns.
+        del frappe.local.message_log[messages_before:]
+        frappe.log_error(title=f"Landed Cost Voucher: {pi.name} left as a draft")
+        return str(e) or e.__class__.__name__
+    return None
+
+
+def cancel_purchase_invoices_from_landed_cost_voucher(doc, method=None):
+    """Cancel the submitted Purchase Invoices this voucher created.
+
+    They are submitted automatically, so without this they would stay posted
+    after the voucher is cancelled, and the amended voucher would bill the
+    same charges a second time. If ERPNext refuses to cancel one (a payment
+    already allocated to it, say), the voucher is not cancelled either and
+    ERPNext's message says why.
+    """
+    invoices = frappe.get_all(
+        "Purchase Invoice",
+        filters={
+            "custom_landed_cost_voucher_reference": doc.name,
+            "naming_series": SERVICES_SERIES,
+            "docstatus": 1,
+        },
+        pluck="name",
+    )
+    for name in invoices:
+        pi = frappe.get_doc("Purchase Invoice", name)
+        pi.flags.ignore_permissions = True
+        pi.cancel()
+        frappe.msgprint(_("Cancelled Purchase Invoice {0}").format(name))
 
 # Patch validate to skip PO/PR for LCV
 original_validate = PurchaseInvoice.validate
