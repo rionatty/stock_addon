@@ -60,6 +60,10 @@ def get_columns():
          "fieldtype": "Currency", "width": 120},
         {"label": _("Banked"), "fieldname": "banked",
          "fieldtype": "Currency", "width": 120},
+        {"label": _("Expenses"), "fieldname": "expense",
+         "fieldtype": "Currency", "width": 120},
+        {"label": _("Other Paid Out"), "fieldname": "other_out",
+         "fieldtype": "Currency", "width": 120},
         {"label": _("Bank Account"), "fieldname": "bank_account",
          "fieldtype": "Link", "options": "Account", "width": 200},
         {"label": _("Running Balance"), "fieldname": "running_balance",
@@ -137,44 +141,118 @@ def get_gl_entries(cash_account, company, from_date, to_date):
     }, as_dict=1) or []
 
 
-def enrich_entry(gle, cash_account):
-    """Get mode of payment, party, bank account based on voucher type."""
-    mode_of_payment = ""
-    party_label = gle.party or ""
-    bank_account = ""
+# Money into a route's cash account is a collection. Money out of it counts
+# as banked only for the part that went to a Bank ledger in the same voucher.
+# The part that went to an Expense account is an expense; anything else — a
+# supplier paid in cash, cash handed to another cash account — is paid out,
+# but not banked. A voucher that mixes them (a deposit with the bank charge
+# taken from the same cash) becomes one row for each part.
+DETAIL_TYPES = ("Collection", "Banking", "Expense", "Cash Transfer", "Payment")
+MONEY_FIELDS = ("collected", "banked", "expense", "other_out")
 
-    if gle.voucher_type == "Payment Entry":
-        pe = frappe.db.get_value(
-            "Payment Entry", gle.voucher_no,
-            ["mode_of_payment", "party_name", "paid_from", "paid_to"],
-            as_dict=1
+
+def get_debit_splits(gl_entries):
+    """Where the money paid out of the cash account went, per voucher.
+
+    One query for all of a route's vouchers: the voucher's debits, divided
+    into those to Bank accounts, Expense accounts and Cash accounts.
+    """
+    vouchers = {gle.voucher_no for gle in gl_entries if flt(gle.credit)}
+    if not vouchers:
+        return {}
+
+    rows = frappe.db.sql("""
+        SELECT
+            gle.voucher_type,
+            gle.voucher_no,
+            gle.account,
+            gle.debit,
+            acc.account_type,
+            acc.root_type
+        FROM `tabGL Entry` gle
+        JOIN `tabAccount` acc ON acc.name = gle.account
+        WHERE gle.voucher_no IN %(vouchers)s
+            AND gle.is_cancelled = 0
+            AND gle.debit > 0
+        ORDER BY gle.creation
+    """, {"vouchers": tuple(vouchers)}, as_dict=1)
+
+    splits = {}
+    for row in rows:
+        split = splits.setdefault(
+            (row.voucher_type, row.voucher_no),
+            frappe._dict(total=0.0, bank=0.0, expense=0.0, cash=0.0, bank_account=""),
         )
-        if pe:
-            mode_of_payment = pe.mode_of_payment or ""
-            if not party_label:
-                party_label = pe.party_name or ""
-            if flt(gle.credit) > 0:
-                bank_account = pe.paid_to or ""
-            elif flt(gle.debit) > 0 and not party_label:
-                party_label = pe.paid_from or ""
+        amount = flt(row.debit)
+        split.total += amount
+        if row.account_type == "Bank":
+            split.bank += amount
+            split.bank_account = split.bank_account or row.account
+        elif row.root_type == "Expense":
+            split.expense += amount
+        elif row.account_type == "Cash":
+            split.cash += amount
+    return splits
 
-    elif gle.voucher_type == "Journal Entry":
-        if flt(gle.credit) > 0:
-            other = frappe.db.sql("""
-                SELECT account FROM `tabJournal Entry Account`
-                WHERE parent = %s AND account != %s AND debit > 0
-                LIMIT 1
-            """, (gle.voucher_no, cash_account))
-            if other:
-                bank_account = other[0][0]
-        if not party_label:
-            party_label = (gle.remarks or "")[:100]
 
-    else:
-        if not party_label:
-            party_label = (gle.remarks or gle.against or "")[:100]
+def get_payment_details(gl_entries):
+    """Mode of payment and party name of the route's Payment Entries, in one query."""
+    names = list({gle.voucher_no for gle in gl_entries if gle.voucher_type == "Payment Entry"})
+    if not names:
+        return {}
+    return {
+        pe.name: pe
+        for pe in frappe.get_all(
+            "Payment Entry",
+            filters={"name": ["in", names]},
+            fields=["name", "mode_of_payment", "party_name"],
+        )
+    }
 
-    return mode_of_payment, party_label, bank_account
+
+def describe(gle, payments):
+    """Mode of payment, and a party or description, for one GL line."""
+    if gle.voucher_type == "Payment Entry":
+        pe = payments.get(gle.voucher_no) or frappe._dict()
+        return pe.mode_of_payment or "", gle.party or pe.party_name or ""
+    return "", gle.party or (gle.remarks or gle.against or "")[:100]
+
+
+def split_entry(gle, splits):
+    """The report rows one GL line on the cash account becomes."""
+
+    def part(entry_type, bank_account="", **money):
+        row = {"entry_type": entry_type, "bank_account": bank_account}
+        row.update({f: flt(money.get(f)) for f in MONEY_FIELDS})
+        return row
+
+    parts = []
+    if flt(gle.debit):
+        parts.append(part("Collection", collected=gle.debit))
+
+    credit = flt(gle.credit)
+    if not credit:
+        return parts
+
+    split = splits.get((gle.voucher_type, gle.voucher_no))
+    if not split or not split.total:
+        parts.append(part("Payment", other_out=credit))
+        return parts
+
+    banked = flt(credit * split.bank / split.total, 2)
+    expense = flt(credit * split.expense / split.total, 2)
+    other = flt(credit - banked - expense, 2)
+
+    if banked:
+        parts.append(part("Banking", split.bank_account, banked=banked))
+    if expense:
+        parts.append(part("Expense", expense=expense))
+    if other:
+        # All of the rest went to other cash accounts, or some of it to a party.
+        rest = split.total - split.bank - split.expense
+        kind = "Cash Transfer" if split.cash and not flt(rest - split.cash, 2) else "Payment"
+        parts.append(part(kind, other_out=other))
+    return parts
 
 
 def get_data(filters):
@@ -205,6 +283,8 @@ def get_data(filters):
                     "entry_type": "No Activity",
                     "collected": 0,
                     "banked": 0,
+                    "expense": 0,
+                    "other_out": 0,
                     "running_balance": 0,
                 })
             continue
@@ -219,49 +299,42 @@ def get_data(filters):
             "entry_type": "ROUTE",
         })
 
+        splits = get_debit_splits(gl_entries)
+        payments = get_payment_details(gl_entries)
+
         running = 0.0
-        route_collected = 0.0
-        route_banked = 0.0
+        totals = dict.fromkeys(MONEY_FIELDS, 0.0)
 
         for gle in gl_entries:
-            collected = flt(gle.debit)
-            banked = flt(gle.credit)
-            running += collected - banked
-            route_collected += collected
-            route_banked += banked
+            mode_of_payment, party_label = describe(gle, payments)
 
-            mode_of_payment, party_label, bank_account = enrich_entry(
-                gle, route.cash_account
-            )
+            for part in split_entry(gle, splits):
+                running += part["collected"] - part["banked"] - part["expense"] - part["other_out"]
+                for fieldname in MONEY_FIELDS:
+                    totals[fieldname] += part[fieldname]
 
-            entry_type = "Collection" if collected > 0 else "Banking"
-
-            data.append({
-                "sales_person": route.sales_person,
-                "employee": route.employee,
-                "employee_name": route.employee_name,
-                "user": route.user,
-                "cash_account": route.cash_account,
-                "posting_date": gle.posting_date,
-                "entry_type": entry_type,
-                "reference": gle.voucher_no,
-                "reference_doctype": gle.voucher_type,
-                "party": party_label,
-                "mode_of_payment": mode_of_payment,
-                "collected": collected,
-                "banked": banked,
-                "bank_account": bank_account,
-                "running_balance": running,
-            })
+                data.append({
+                    "sales_person": route.sales_person,
+                    "employee": route.employee,
+                    "employee_name": route.employee_name,
+                    "user": route.user,
+                    "cash_account": route.cash_account,
+                    "posting_date": gle.posting_date,
+                    "reference": gle.voucher_no,
+                    "reference_doctype": gle.voucher_type,
+                    "party": party_label,
+                    "mode_of_payment": mode_of_payment,
+                    **part,
+                    "running_balance": running,
+                })
 
         # Route subtotal
         data.append({
             "sales_person": route.sales_person,
             "employee_name": "-- ROUTE TOTAL --",
             "entry_type": "SUBTOTAL",
-            "collected": route_collected,
-            "banked": route_banked,
-            "running_balance": route_collected - route_banked,
+            **totals,
+            "running_balance": totals["collected"] - totals["banked"] - totals["expense"] - totals["other_out"],
         })
 
     return data
@@ -275,20 +348,27 @@ def get_report_summary(data):
     if not data:
         return []
 
-    detail = [d for d in data if d.get("entry_type") in ("Collection", "Banking")]
+    detail = [d for d in data if d.get("entry_type") in DETAIL_TYPES]
 
-    total_collected = sum(flt(d.get("collected")) for d in detail)
-    total_banked = sum(flt(d.get("banked")) for d in detail)
-    cash_on_hand = total_collected - total_banked
+    total = {f: sum(flt(d.get(f)) for d in detail) for f in MONEY_FIELDS}
+    cash_on_hand = total["collected"] - total["banked"] - total["expense"] - total["other_out"]
 
     routes_active = len(set(d.get("sales_person") for d in detail))
-    txn_count = len(detail)
+    # a voucher split into banked and expense parts is still one transaction
+    txn_count = len({(d.get("sales_person"), d.get("reference_doctype"), d.get("reference")) for d in detail})
 
-    return [
-        {"value": total_collected, "label": _("Total Collected"),
+    summary = [
+        {"value": total["collected"], "label": _("Total Collected"),
          "datatype": "Currency", "indicator": "green"},
-        {"value": total_banked, "label": _("Total Banked"),
+        {"value": total["banked"], "label": _("Total Banked"),
          "datatype": "Currency", "indicator": "blue"},
+        {"value": total["expense"], "label": _("Total Expenses"),
+         "datatype": "Currency", "indicator": "red"},
+    ]
+    if total["other_out"]:
+        summary.append({"value": total["other_out"], "label": _("Other Paid Out"),
+                        "datatype": "Currency", "indicator": "grey"})
+    summary += [
         {"value": cash_on_hand, "label": _("Cash On Hand"),
          "datatype": "Currency",
          "indicator": "orange" if cash_on_hand > 0 else "green"},
@@ -297,22 +377,24 @@ def get_report_summary(data):
         {"value": txn_count, "label": _("Transactions"),
          "datatype": "Int", "indicator": "grey"},
     ]
+    return summary
 
 
 def get_chart_data(data):
     if not data:
         return None
 
-    detail = [d for d in data if d.get("entry_type") in ("Collection", "Banking")]
+    detail = [d for d in data if d.get("entry_type") in DETAIL_TYPES]
     if not detail:
         return None
 
     totals = {}
     for row in detail:
         sp = row.get("sales_person") or "Unassigned"
-        totals.setdefault(sp, {"collected": 0, "banked": 0})
+        totals.setdefault(sp, {"collected": 0, "banked": 0, "expense": 0})
         totals[sp]["collected"] += flt(row.get("collected"))
         totals[sp]["banked"] += flt(row.get("banked"))
+        totals[sp]["expense"] += flt(row.get("expense"))
 
     sorted_routes = sorted(
         totals.items(),
@@ -326,10 +408,11 @@ def get_chart_data(data):
             "datasets": [
                 {"name": "Collected", "values": [r[1]["collected"] for r in sorted_routes]},
                 {"name": "Banked", "values": [r[1]["banked"] for r in sorted_routes]},
+                {"name": "Expenses", "values": [r[1]["expense"] for r in sorted_routes]},
             ]
         },
         "type": "bar",
-        "colors": ["#7cc99a", "#7ab8e8"],
+        "colors": ["#7cc99a", "#7ab8e8", "#e57373"],
         "barOptions": {"stacked": 0, "spaceRatio": 0.3}
     }
 
@@ -372,11 +455,11 @@ def get_pdf_html(filters, data, columns=None):
                     "user": row.get("user"),
                     "cash_account": row.get("cash_account"),
                     "rows": [],
-                    "totals": {"collected": 0, "banked": 0}
+                    "totals": dict.fromkeys(MONEY_FIELDS, 0.0)
                 }
             continue
 
-        if et not in ("Collection", "Banking"):
+        if et not in DETAIL_TYPES:
             continue
 
         sp = row.get("sales_person") or "Unassigned"
@@ -388,15 +471,20 @@ def get_pdf_html(filters, data, columns=None):
                 "user": row.get("user"),
                 "cash_account": row.get("cash_account"),
                 "rows": [],
-                "totals": {"collected": 0, "banked": 0}
+                "totals": dict.fromkeys(MONEY_FIELDS, 0.0)
             }
         by_route[sp]["rows"].append(row)
-        by_route[sp]["totals"]["collected"] += flt(row.get("collected"))
-        by_route[sp]["totals"]["banked"] += flt(row.get("banked"))
+        for fieldname in MONEY_FIELDS:
+            by_route[sp]["totals"][fieldname] += flt(row.get(fieldname))
 
-    total_collected = sum(r["totals"]["collected"] for r in by_route.values())
-    total_banked = sum(r["totals"]["banked"] for r in by_route.values())
-    total_balance = total_collected - total_banked
+    def cash_left(totals):
+        return totals["collected"] - totals["banked"] - totals["expense"] - totals["other_out"]
+
+    grand = {f: sum(r["totals"][f] for r in by_route.values()) for f in MONEY_FIELDS}
+    total_collected = grand["collected"]
+    total_banked = grand["banked"]
+    total_expense = grand["expense"]
+    total_balance = cash_left(grand)
 
     # Filter summary
     filter_html = ""
@@ -417,16 +505,33 @@ def get_pdf_html(filters, data, columns=None):
                 '</div>'
             )
 
+    type_colors = {
+        "Collection": "#5cb37e",
+        "Banking": "#e8884a",
+        "Expense": "#d9534f",
+        "Cash Transfer": "#9374c8",
+        "Payment": "#7a8aa3",
+    }
+
+    def money_cell(value, css_class=""):
+        shown = fmt_money(value, currency=currency) if flt(value) else "-"
+        return '<td class="text-right ' + css_class + '">' + shown + '</td>'
+
+    def total_cells(totals):
+        return "".join(
+            '<td class="text-right"><strong>' + fmt_money(totals[f], currency=currency) + '</strong></td>'
+            for f in MONEY_FIELDS
+        ) + '<td class="text-right"><strong>' + fmt_money(cash_left(totals), currency=currency) + '</strong></td>'
+
     # Build table rows
     rows_html = ""
     for sp, info in by_route.items():
         if not info["rows"]:
             continue
-        route_balance = info["totals"]["collected"] - info["totals"]["banked"]
 
         rows_html += (
             '<tr class="route-header">'
-            '<td colspan="9">'
+            '<td colspan="11">'
             '<strong>ROUTE: ' + str(info["route"]) + '</strong> &nbsp;|&nbsp; '
             'Employee: <strong>' + str(info["employee"] or "-") + '</strong> '
             '(' + str(info["employee_name"] or "-") + ') &nbsp;|&nbsp; '
@@ -438,10 +543,10 @@ def get_pdf_html(filters, data, columns=None):
 
         running = 0.0
         for idx, row in enumerate(info["rows"], 1):
-            running += flt(row.get("collected")) - flt(row.get("banked"))
+            running += cash_left({f: flt(row.get(f)) for f in MONEY_FIELDS})
             row_class = "even" if idx % 2 == 0 else "odd"
             entry_type = row.get("entry_type") or ""
-            type_color = "#5cb37e" if entry_type == "Collection" else "#e8884a"
+            type_color = type_colors.get(entry_type, "#7a8aa3")
             type_badge = (
                 f'<span style="background:{type_color};color:white;'
                 f'padding:2px 6px;border-radius:3px;font-size:7pt;'
@@ -456,28 +561,26 @@ def get_pdf_html(filters, data, columns=None):
                 '<td>' + str(row.get('reference') or '-') + '</td>'
                 '<td>' + str(row.get('party') or '-') + '</td>'
                 '<td>' + str(row.get('mode_of_payment') or '-') + '</td>'
-                '<td class="text-right collected-col">' + (fmt_money(row.get('collected'), currency=currency) if flt(row.get('collected')) else '-') + '</td>'
-                '<td class="text-right banked-col">' + (fmt_money(row.get('banked'), currency=currency) if flt(row.get('banked')) else '-') + '</td>'
-                '<td class="text-right"><strong>' + fmt_money(running, currency=currency) + '</strong></td>'
+                + money_cell(row.get('collected'), 'collected-col')
+                + money_cell(row.get('banked'), 'banked-col')
+                + money_cell(row.get('expense'), 'expense-col')
+                + money_cell(row.get('other_out'))
+                + '<td class="text-right"><strong>' + fmt_money(running, currency=currency) + '</strong></td>'
                 '</tr>'
             )
 
         rows_html += (
             '<tr class="route-subtotal">'
             '<td colspan="6" class="text-right"><strong>ROUTE TOTAL: ' + str(sp) + '</strong></td>'
-            '<td class="text-right"><strong>' + fmt_money(info["totals"]["collected"], currency=currency) + '</strong></td>'
-            '<td class="text-right"><strong>' + fmt_money(info["totals"]["banked"], currency=currency) + '</strong></td>'
-            '<td class="text-right"><strong>' + fmt_money(route_balance, currency=currency) + '</strong></td>'
-            '</tr>'
+            + total_cells(info["totals"])
+            + '</tr>'
         )
 
     totals_html = (
         '<tr class="totals-row">'
         '<td colspan="6" class="text-right"><strong>GRAND TOTAL</strong></td>'
-        '<td class="text-right"><strong>' + fmt_money(total_collected, currency=currency) + '</strong></td>'
-        '<td class="text-right"><strong>' + fmt_money(total_banked, currency=currency) + '</strong></td>'
-        '<td class="text-right"><strong>' + fmt_money(total_balance, currency=currency) + '</strong></td>'
-        '</tr>'
+        + total_cells(grand)
+        + '</tr>'
     )
 
     now = format_datetime(get_datetime(), "dd MMM yyyy HH:mm")
@@ -505,7 +608,7 @@ def get_pdf_html(filters, data, columns=None):
         .filter-item { font-size: 7.5pt; }
         .filter-label { font-weight: 600; color: #4a5568; }
         .filter-value { color: #2d3748; }
-        .summary-cards { display: grid; grid-template-columns: repeat(5, 1fr);
+        .summary-cards { display: grid; grid-template-columns: repeat(6, 1fr);
                         gap: 8px; margin-bottom: 10px; }
         .summary-card { padding: 10px; border-radius: 6px; color: white; text-align: center;
                         box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
@@ -514,6 +617,7 @@ def get_pdf_html(filters, data, columns=None):
         .card-orange { background: linear-gradient(135deg, #f5a96b, #e8884a); }
         .card-purple { background: linear-gradient(135deg, #b08ee0, #9374c8); }
         .card-grey { background: linear-gradient(135deg, #95a3b8, #7a8aa3); }
+        .card-red { background: linear-gradient(135deg, #e57373, #d9534f); }
         .summary-card .label { font-size: 7pt; opacity: 0.95; margin-bottom: 3px;
                               text-transform: uppercase; letter-spacing: 0.4px; font-weight: 500; }
         .summary-card .value { font-size: 12pt; font-weight: 700; }
@@ -533,6 +637,7 @@ def get_pdf_html(filters, data, columns=None):
         table.report-table .text-center { text-align: center; }
         .collected-col { color: #2f855a; font-weight: 600; }
         .banked-col { color: #c05621; font-weight: 600; }
+        .expense-col { color: #c53030; font-weight: 600; }
         tr.route-subtotal { background: #d6e3f5 !important; font-weight: 700; color: #1a365d; }
         tr.route-subtotal td { padding: 7px 4px; border-color: #7ab8e8; font-size: 8pt; }
         tr.totals-row { background: linear-gradient(135deg, #4299e1, #667eea) !important; color: white; font-weight: 700; }
@@ -584,6 +689,10 @@ def get_pdf_html(filters, data, columns=None):
                 '<div class="label">Total Banked</div>'
                 '<div class="value">' + fmt_money(total_banked, currency=currency) + '</div>'
             '</div>'
+            '<div class="summary-card card-red">'
+                '<div class="label">Total Expenses</div>'
+                '<div class="value">' + fmt_money(total_expense, currency=currency) + '</div>'
+            '</div>'
             '<div class="summary-card card-orange">'
                 '<div class="label">Cash On Hand</div>'
                 '<div class="value">' + fmt_money(total_balance, currency=currency) + '</div>'
@@ -607,6 +716,8 @@ def get_pdf_html(filters, data, columns=None):
             '<th>Mode</th>'
             '<th class="text-right">Collected</th>'
             '<th class="text-right">Banked</th>'
+            '<th class="text-right">Expenses</th>'
+            '<th class="text-right">Other Out</th>'
             '<th class="text-right">Running Bal.</th>'
         '</tr></thead><tbody>' + rows_html + totals_html + '</tbody></table>'
 

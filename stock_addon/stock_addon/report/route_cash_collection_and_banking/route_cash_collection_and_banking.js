@@ -66,6 +66,9 @@ frappe.query_reports["Route Cash Collection and Banking"] = {
         if (column.fieldname === "banked" && flt(data?.banked) > 0) {
             value = `<span style="color:#c05621;font-weight:600">${value}</span>`;
         }
+        if (column.fieldname === "expense" && flt(data?.expense) > 0) {
+            value = `<span style="color:#c53030;font-weight:600">${value}</span>`;
+        }
         return value;
     },
 
