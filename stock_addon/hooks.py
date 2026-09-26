@@ -21,7 +21,9 @@ app_include_css = "stock_addon.bundle.css"
 #  - form_sidebar_toggle.js: collapse/expand the right-hand form panel
 #  - trial_balance_report.js: Trial Balance printout with the account code
 #    and the ledger name in separate columns
+#  - full_width.js: the desk fills the window unless the user says otherwise
 app_include_js = [
+    "/assets/stock_addon/js/full_width.js",
     "/assets/stock_addon/js/general_ledger_report.js",
     "/assets/stock_addon/js/stock_addon_theme.js",
     "/assets/stock_addon/js/form_sidebar_toggle.js",
