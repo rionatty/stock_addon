@@ -581,7 +581,7 @@
    "property": "options",
    "property_type": "Text",
    "row_name": null,
-   "value": "\nPR-FABRIC-.###.-.YY.\nPR-GENERAL ITEM-.###.-.YY.\nPR-LOCAL MATERIAL-.###.-.YY.\nPR-IMP MATERIAL-.###.-.YY.\nPR-SERVICES-.###.-.YY.\nPR-STOCK LOT-.###.-.YY.\nPR-TOWEL-.###.-.YY.\nMAT-PR-RETURN-.YYYY.-"
+   "value": "\nPR-LOC.#####.\nPR-IMP.#####."
   },
   {
    "_assign": null,

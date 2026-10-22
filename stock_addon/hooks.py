@@ -51,7 +51,6 @@ extend_bootinfo = "stock_addon.stock_addon.theme.boot_session"
 # include js in doctype views
 doctype_js = {
     # "Item" : "public/js/item.js",
-    "Purchase Receipt" : "public/js/purchase_receipt.js ",
     "Stock Entry" : "public/js/stock_entry.js",
     "Landed Cost Voucher" : "public/js/landed_cost_voucher.js",
     "Delivery Note" : "public/js/delivery_note.js",
