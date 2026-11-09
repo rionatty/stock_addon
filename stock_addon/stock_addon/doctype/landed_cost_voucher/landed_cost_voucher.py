@@ -59,6 +59,8 @@ def create_purchase_invoice_from_landed_cost_voucher_taxes(doc, method):
         for tax_row in charge_rows:
             pi.append("taxes", {
                 "charge_type": "Actual",
+                # a flat amount is never inside the rate; the field's default would tick it (tax_inclusive.py)
+                "included_in_print_rate": 0,
                 "account_head": tax_row.expense_account,
                 "description": tax_row.description,
                 "tax_amount": tax_row.amount,

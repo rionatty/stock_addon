@@ -15,12 +15,18 @@ included in Basic Rate?":
   * once more before the document is validated, whatever wrote it — the
     desk, the Sales Pro app or the API (include_taxes_in_rate).
 
-Two kinds of row are left alone, because ERPNext refuses them as inclusive
-(accounts_controller.validate_inclusive_tax) and saving would fail:
+Two kinds of row are never included, because ERPNext refuses them as
+inclusive (accounts_controller.validate_inclusive_tax) and saving would fail:
 
   * a charge of type "Actual" — a flat amount, not a rate to back out;
   * a "Valuation" charge on a purchase, which belongs to the item's cost
     rather than to its rate.
+
+The field's default ticks these too as they are added, so they are unticked
+again before validation. Without that, the Purchase Invoice a Landed Cost
+Voucher makes for its charges (all of type Actual) was refused, and the
+voucher with it: "Charge of type 'Actual' in row 1 cannot be included in
+Item Rate or Paid Amount".
 """
 
 import frappe
@@ -46,8 +52,12 @@ def include_taxes_in_rate(doc, method=None):
 	out of is the one that is saved.
 	"""
 	for row in doc.get("taxes") or []:
-		if can_be_inclusive(row) and not cint(row.get(FIELDNAME)):
-			row.set(FIELDNAME, 1)
+		if can_be_inclusive(row):
+			if not cint(row.get(FIELDNAME)):
+				row.set(FIELDNAME, 1)
+		elif cint(row.get(FIELDNAME)):
+			# ticked by the field's default as it was added
+			row.set(FIELDNAME, 0)
 
 
 @frappe.whitelist()
